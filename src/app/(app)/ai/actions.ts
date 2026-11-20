@@ -1,14 +1,11 @@
 "use server";
-import { generateText } from "ai";
 import { z } from "zod";
 import { requireUser } from "@/lib/session";
 import { visibleStudents } from "@/lib/scope";
 import { attendanceRates, gradeAverages } from "@/lib/analytics";
+import { aiErrorMessage, generatePlainText } from "@/lib/ai";
 
 export type AiState = { text?: string; error?: string };
-
-// Routed through Vercel AI Gateway: plain "provider/model" string, swap via env without code changes.
-const MODEL = process.env.AI_MODEL ?? "anthropic/claude-sonnet-4.6";
 
 const SYSTEM =
   "You are an assistant for school teachers. Produce practical, classroom-ready, age-appropriate output. " +
@@ -16,16 +13,10 @@ const SYSTEM =
   "Everything you write is a DRAFT that the teacher will review.";
 
 async function run(prompt: string): Promise<AiState> {
-  // On Vercel the AI Gateway authenticates via OIDC automatically; elsewhere a key is needed.
-  if (!process.env.AI_GATEWAY_API_KEY && !process.env.VERCEL) {
-    return { error: "AI is not configured. Set AI_GATEWAY_API_KEY (or deploy on Vercel with AI Gateway enabled)." };
-  }
   try {
-    const { text } = await generateText({ model: MODEL, instructions: SYSTEM, prompt });
-    return { text };
+    return { text: await generatePlainText(prompt, SYSTEM) };
   } catch (e) {
-    console.error("AI error", e);
-    return { error: "The AI service couldn't complete that request. Please try again." };
+    return { error: aiErrorMessage(e) };
   }
 }
 

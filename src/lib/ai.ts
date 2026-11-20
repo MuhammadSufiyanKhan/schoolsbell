@@ -15,11 +15,109 @@ export function assertAiConfigured() {
   }
 }
 
-/** Turn any failure into a message that is safe to show a teacher. */
+// ───────────────────────── Failure handling ─────────────────────────
+
+export type AiFailure = "not_configured" | "billing" | "auth" | "rate_limit" | "model" | "timeout" | "unknown";
+
+/** Walk an error and its `cause` chain, collecting the HTTP status and every message/body we can read. */
+function inspect(e: unknown) {
+  let status: number | undefined;
+  const parts: string[] = [];
+  const seen = new Set<unknown>();
+  let cur: unknown = e;
+  for (let depth = 0; cur && typeof cur === "object" && !seen.has(cur) && depth < 5; depth++) {
+    seen.add(cur);
+    const o = cur as Record<string, unknown>;
+    const st = o.statusCode ?? o.status;
+    if (status === undefined && typeof st === "number") status = st;
+    for (const k of ["name", "message", "type", "code", "responseBody"]) if (typeof o[k] === "string") parts.push(o[k] as string);
+    cur = o.cause;
+  }
+  if (typeof e === "string") parts.push(e);
+  return { status, text: parts.join(" ").toLowerCase() };
+}
+
+/** Decide WHY an AI call failed, from the provider's own signals (status code + wording). */
+export function classifyAiError(e: unknown): AiFailure {
+  if (e instanceof AiUnavailableError) return "not_configured";
+  const { status, text } = inspect(e);
+  // Billing first: providers report "no credit" as 402, 403 or even 429.
+  if (status === 402 || /credit card|payment (method|required)|billing|customer_verification|insufficient[_ ](funds|credit|quota)|credit balance|out of credit/.test(text)) return "billing";
+  if (status === 401 || status === 403 || /invalid[_ ]api[_ ]key|incorrect api key|authentication|unauthori[sz]ed|permission denied/.test(text)) return "auth";
+  if (status === 429 || /rate[ _]limit|too many requests|quota/.test(text)) return "rate_limit";
+  if (status === 404 || /model.{0,40}(not found|does not exist|not available)|unknown model|no such model/.test(text)) return "model";
+  if (status === 408 || status === 504 || /timeout|timed out|aborterror|aborted/.test(text)) return "timeout";
+  return "unknown";
+}
+
+/** Accurate, actionable and secret-free: shown to teachers and administrators. */
+export const AI_FAILURE_MESSAGES: Record<AiFailure, string> = {
+  not_configured: "AI isn't set up yet. An administrator needs to add an AI key (AI_GATEWAY_API_KEY) or deploy on Vercel with AI Gateway enabled.",
+  billing: "AI is switched off because the AI account needs a payment method or has run out of credit. An administrator can fix this (Vercel dashboard → AI Gateway → add a card, or top up), then try again.",
+  auth: "AI is unavailable because the AI key was rejected. An administrator needs to check the AI key in the project settings.",
+  rate_limit: "The AI service is busy or over its usage limit. Wait a minute and try again.",
+  model: "The configured AI model wasn't found. An administrator should check the AI_MODEL setting.",
+  timeout: "The AI took too long to answer. Try again, or ask for fewer questions.",
+  unknown: "The AI service couldn't complete that request. Please try again, and tell your administrator if it keeps failing.",
+};
+
+/** Strip anything that looks like an API key / bearer token before it can reach a log. */
+export function redactSecrets(text: string) {
+  return text
+    .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [redacted]")
+    .replace(/\b(?:sk|vck|pk|key|ak|gsk|xai)[-_][A-Za-z0-9_-]{8,}\b/gi, "[redacted-key]")
+    .replace(/\b[A-Za-z0-9_-]{32,}\b/g, "[redacted]");
+}
+
+function logFailure(failure: AiFailure, e: unknown) {
+  // Log the classification and the provider's message only. NEVER the whole error object: it carries the
+  // request body, i.e. the prompt, which can contain students' answers.
+  const { status } = inspect(e);
+  const message = redactSecrets(e instanceof Error ? e.message : String(e)).slice(0, 300);
+  console.error("AI error", { failure, status, model: typeof AI_MODEL === "string" ? AI_MODEL : "custom", message });
+}
+
+/** Message for inline (return-value) forms. */
 export function aiErrorMessage(e: unknown) {
-  if (e instanceof AiUnavailableError) return e.message;
-  console.error("AI error", e);
-  return "The AI service couldn't complete that request. Please try again.";
+  const failure = classifyAiError(e);
+  if (failure !== "not_configured") logFailure(failure, e);
+  return AI_FAILURE_MESSAGES[failure];
+}
+
+// Query strings are attacker-controllable, so redirect-based pages only ever show these fixed messages.
+export const AI_NOTICES: Record<string, string> = {
+  ai_unavailable: AI_FAILURE_MESSAGES.not_configured,
+  ai_billing: AI_FAILURE_MESSAGES.billing,
+  ai_auth: AI_FAILURE_MESSAGES.auth,
+  ai_rate_limit: AI_FAILURE_MESSAGES.rate_limit,
+  ai_model: AI_FAILURE_MESSAGES.model,
+  ai_timeout: AI_FAILURE_MESSAGES.timeout,
+  ai_failed: AI_FAILURE_MESSAGES.unknown,
+  ai_empty: "Nothing needed AI grading.",
+};
+
+const CODE: Record<AiFailure, string> = {
+  not_configured: "ai_unavailable",
+  billing: "ai_billing",
+  auth: "ai_auth",
+  rate_limit: "ai_rate_limit",
+  model: "ai_model",
+  timeout: "ai_timeout",
+  unknown: "ai_failed",
+};
+
+/** Code for redirect-based forms (see AI_NOTICES). */
+export function aiErrorCode(e: unknown) {
+  const failure = classifyAiError(e);
+  if (failure !== "not_configured") logFailure(failure, e);
+  return CODE[failure];
+}
+
+/** One plain-text generation, used by the AI Assistant page. */
+export async function generatePlainText(prompt: string, instructions: string, model: LanguageModel = AI_MODEL) {
+  assertAiConfigured();
+  const { text } = await generateText({ model, instructions, prompt });
+  return text;
 }
 
 // ───────────────────────── Test generation ─────────────────────────
@@ -149,18 +247,4 @@ export async function gradeAnswers(items: GradeItem[], model: LanguageModel = AI
     out.set(r.id, { score: clampScore(r.score, item.maxPoints), feedback: r.feedback.trim().slice(0, 600) });
   }
   return out;
-}
-
-// ───────────────── Error codes for redirect-based forms ─────────────────
-// Query strings are attacker-controllable, so pages only ever show these fixed messages.
-export const AI_NOTICES: Record<string, string> = {
-  ai_unavailable: "AI is not configured. Set AI_GATEWAY_API_KEY (or deploy on Vercel with AI Gateway enabled).",
-  ai_failed: "The AI service couldn't complete that request. Please try again.",
-  ai_empty: "Nothing needed AI grading.",
-};
-
-export function aiErrorCode(e: unknown) {
-  if (e instanceof AiUnavailableError) return "ai_unavailable";
-  console.error("AI error", e);
-  return "ai_failed";
 }
