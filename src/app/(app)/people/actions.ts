@@ -6,6 +6,7 @@ import { z } from "zod";
 import { db, schema } from "@/db";
 import { requireUser } from "@/lib/session";
 import { generatePassword } from "@/lib/passwords";
+import { parseGuardian, parseStaff } from "@/lib/profile";
 
 export type CredState =
   | {
@@ -37,6 +38,25 @@ export async function createUser(_prev: CredState, form: FormData): Promise<Cred
   // Only the principal (owner) may create other administrators.
   if (d.role === "admin" && !me.isOwner) return fail("Only the principal can create administrators.");
 
+  // Role-specific profile details (validated before anything is written).
+  const get = (k: string) => form.get(k);
+  let staff: { phone: string | null; cnic: string | null; specializations: string[] } | undefined;
+  let guardian: { guardianName: string | null; guardianPhone: string | null; guardianCnic: string | null } | undefined;
+  if (d.role === "teacher" || d.role === "admin") {
+    const r = parseStaff(get);
+    if (!r.ok) return fail(r.error);
+    staff = r.value;
+    if (staff.cnic) {
+      const [dupe] = await db.select({ id: schema.users.id }).from(schema.users).where(and(eq(schema.users.schoolId, me.schoolId), eq(schema.users.cnic, staff.cnic))).limit(1);
+      if (dupe) return fail("Another staff member already has this ID card number.");
+    }
+  }
+  if (d.role === "student") {
+    const r = parseGuardian(get);
+    if (!r.ok) return fail(r.error);
+    guardian = r.value;
+  }
+
   const [dupe] = await db.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.email, d.email)).limit(1);
   if (dupe) return fail("That email is already in use.");
 
@@ -58,10 +78,10 @@ export async function createUser(_prev: CredState, form: FormData): Promise<Cred
 
   const password = generatePassword();
   const passwordHash = await bcrypt.hash(password, 10);
-  const [u] = await db.insert(schema.users).values({ schoolId: me.schoolId, name: d.name, email: d.email, passwordHash, role: d.role }).returning();
+  const [u] = await db.insert(schema.users).values({ schoolId: me.schoolId, name: d.name, email: d.email, passwordHash, role: d.role, ...(staff ?? {}) }).returning();
 
   if (d.role === "student") {
-    await db.insert(schema.students).values({ schoolId: me.schoolId, userId: u.id, classId: classId!, name: d.name, rollNo: d.rollNo! });
+    await db.insert(schema.students).values({ schoolId: me.schoolId, userId: u.id, classId: classId!, name: d.name, rollNo: d.rollNo!, ...(guardian ?? {}) });
   }
   if (linkStudent) {
     await db.update(schema.students).set({ guardianId: u.id }).where(and(eq(schema.students.id, linkStudent), eq(schema.students.schoolId, me.schoolId)));

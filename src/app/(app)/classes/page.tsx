@@ -3,13 +3,28 @@ import { db, schema } from "@/db";
 import { requireUser } from "@/lib/session";
 import { visibleClasses } from "@/lib/scope";
 import { Empty, PageHeader } from "@/components/ui";
+import { isSpecialist } from "@/lib/pk";
 import { addSubject, assignSubjectTeacher, createClass, setClassTeacher } from "./actions";
 
-function TeacherSelect({ teachers, value, name = "teacherId", label }: { teachers: { id: number; name: string }[]; value?: number | null; name?: string; label: string }) {
+type Teacher = { id: number; name: string; specializations: string[] };
+
+/**
+ * Teacher dropdown. When a subject name is known, teachers specialised in it are listed first with a ★;
+ * every option shows the teacher's specialisations so the principal can choose at a glance.
+ */
+function TeacherSelect({ teachers, value, name = "teacherId", label, subjectName }: { teachers: Teacher[]; value?: number | null; name?: string; label: string; subjectName?: string }) {
+  const specialists = subjectName ? teachers.filter((t) => isSpecialist(t.specializations, subjectName)) : [];
+  const others = teachers.filter((t) => !specialists.includes(t));
+  const opt = (t: Teacher, star: boolean) => (
+    <option key={t.id} value={t.id}>
+      {star ? "★ " : ""}{t.name}{t.specializations.length ? ` — ${t.specializations.join(", ")}` : ""}
+    </option>
+  );
   return (
-    <select name={name} defaultValue={value ?? ""} className="input !w-auto !py-1 text-xs" aria-label={label}>
+    <select name={name} defaultValue={value ?? ""} className="input !w-auto !max-w-[16rem] !py-1 text-xs" aria-label={label}>
       <option value="">— unassigned —</option>
-      {teachers.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+      {specialists.map((t) => opt(t, true))}
+      {others.map((t) => opt(t, false))}
     </select>
   );
 }
@@ -22,7 +37,7 @@ export default async function ClassesPage() {
   const [counts, subjects, teachers] = await Promise.all([
     ids.length ? db.select({ classId: schema.students.classId, n: count() }).from(schema.students).where(inArray(schema.students.classId, ids)).groupBy(schema.students.classId) : [],
     ids.length ? db.select().from(schema.subjects).where(inArray(schema.subjects.classId, ids)).orderBy(schema.subjects.name) : [],
-    db.select({ id: schema.users.id, name: schema.users.name }).from(schema.users).where(and(eq(schema.users.schoolId, user.schoolId), eq(schema.users.role, "teacher"))).orderBy(schema.users.name),
+    db.select({ id: schema.users.id, name: schema.users.name, specializations: schema.users.specializations }).from(schema.users).where(and(eq(schema.users.schoolId, user.schoolId), eq(schema.users.role, "teacher"))).orderBy(schema.users.name),
   ]);
   const tName = new Map(teachers.map((t) => [t.id, t.name]));
 
@@ -40,7 +55,7 @@ export default async function ClassesPage() {
               <label className="label" htmlFor="c-teacher">Class teacher</label>
               <select id="c-teacher" name="teacherId" className="input" defaultValue="">
                 <option value="">— none —</option>
-                {teachers.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                {teachers.map((t) => <option key={t.id} value={t.id}>{t.name}{t.specializations.length ? ` — ${t.specializations.join(", ")}` : ""}</option>)}
               </select>
             </div>
             <div className="sm:col-span-4"><button className="btn">Create class</button></div>
@@ -82,7 +97,7 @@ export default async function ClassesPage() {
                     {isAdmin ? (
                       <form action={assignSubjectTeacher} className="flex items-center gap-2">
                         <input type="hidden" name="subjectId" value={s.id} />
-                        <TeacherSelect teachers={teachers} value={s.teacherId} label={`Teacher for ${s.name}`} />
+                        <TeacherSelect teachers={teachers} value={s.teacherId} label={`Teacher for ${s.name}`} subjectName={s.name} />
                         <button className="btn-ghost !py-1 text-xs">Assign</button>
                       </form>
                     ) : (

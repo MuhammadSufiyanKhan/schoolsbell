@@ -41,6 +41,11 @@ export const users = pgTable(
     role: roleEnum("role").notNull(),
     // The principal who registered the school. Only the owner can create/promote other admins.
     isOwner: boolean("is_owner").notNull().default(false),
+    // Staff profile. Canonical formats: phone "+923001234567", CNIC "35202-1234567-1" (see lib/pk.ts).
+    phone: text("phone"),
+    cnic: text("cnic"),
+    /** Subjects a teacher is qualified to teach (free text, e.g. ["Mathematics", "Physics"]). */
+    specializations: jsonb("specializations").$type<string[]>().notNull().default([]),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (t) => [uniqueIndex("users_email_idx").on(t.email)],
@@ -73,6 +78,10 @@ export const students = pgTable(
     name: text("name").notNull(),
     rollNo: text("roll_no").notNull(),
     dob: date("dob"),
+    // Guardian contact details (separate from guardian_id, which links a parent *login*).
+    guardianName: text("guardian_name"),
+    guardianPhone: text("guardian_phone"),
+    guardianCnic: text("guardian_cnic"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (t) => [index("students_class_idx").on(t.classId)],

@@ -1,6 +1,7 @@
 "use client";
 import { useActionState, useState } from "react";
 import { createUser, resetPassword, type CredState } from "./actions";
+import { GuardianFields, StaffFields } from "@/components/profile-fields";
 
 function Credentials({ c }: { c: NonNullable<NonNullable<CredState>["created"]> }) {
   const [copied, setCopied] = useState(false);
@@ -32,7 +33,7 @@ type Opt = { id: number; label: string };
  * React 19 resets form fields after an action, which would otherwise desync the role dropdown
  * from the role-dependent fields, and wipe what the user typed when there's an error.
  */
-function Fields({ classes, students, canCreateAdmin, v }: { classes: Opt[]; students: Opt[]; canCreateAdmin: boolean; v?: Record<string, string> }) {
+function Fields({ classes, students, canCreateAdmin, suggestions, v }: { classes: Opt[]; students: Opt[]; canCreateAdmin: boolean; suggestions: string[]; v?: Record<string, string> }) {
   const [role, setRole] = useState(v?.role ?? "teacher");
   return (
     <>
@@ -65,8 +66,10 @@ function Fields({ classes, students, canCreateAdmin, v }: { classes: Opt[]; stud
               <label className="label" htmlFor="u-roll">Roll number</label>
               <input id="u-roll" name="rollNo" required defaultValue={v?.rollNo} className="input" />
             </div>
+            <GuardianFields v={v} idp="u-g" />
           </>
         )}
+        {(role === "teacher" || role === "admin") && <StaffFields v={v} suggestions={suggestions} idp="u-s" />}
         {role === "parent" && (
           <div className="sm:col-span-2">
             <label className="label" htmlFor="u-student">Link to child (optional)</label>
@@ -80,14 +83,14 @@ function Fields({ classes, students, canCreateAdmin, v }: { classes: Opt[]; stud
   );
 }
 
-export function CreateUserForm({ classes, students, canCreateAdmin }: { classes: Opt[]; students: Opt[]; canCreateAdmin: boolean }) {
+export function CreateUserForm({ classes, students, canCreateAdmin, suggestions }: { classes: Opt[]; students: Opt[]; canCreateAdmin: boolean; suggestions: string[] }) {
   const [state, action, pending] = useActionState(createUser, undefined);
   return (
     <section className="card max-w-2xl">
       <h2 className="mb-1 font-semibold">Add a person</h2>
       <p className="mb-4 text-sm text-muted">A one-time password is generated for them.</p>
       <form key={state?.at ?? 0} action={action} className="grid gap-3 sm:grid-cols-2">
-        <Fields classes={classes} students={students} canCreateAdmin={canCreateAdmin} v={state?.error ? state.values : undefined} />
+        <Fields classes={classes} students={students} canCreateAdmin={canCreateAdmin} suggestions={suggestions} v={state?.error ? state.values : undefined} />
         <div className="sm:col-span-2">
           <button className="btn" disabled={pending}>{pending ? "Creating…" : "Create account"}</button>
         </div>

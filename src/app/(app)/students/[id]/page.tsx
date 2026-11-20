@@ -6,6 +6,8 @@ import { requireUser } from "@/lib/session";
 import { visibleStudents } from "@/lib/scope";
 import { attendanceRates, gradeAverages, letter, riskReasons } from "@/lib/analytics";
 import { Badge, PageHeader, Stat, Table } from "@/components/ui";
+import { formatPkMobile, telHref } from "@/lib/pk";
+import { GuardianEditForm } from "./guardian-form";
 
 export default async function StudentDetail({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser(["admin", "teacher"]);
@@ -55,6 +57,29 @@ export default async function StudentDetail({ params }: { params: Promise<{ id: 
         <Stat label="Grade average" value={g != null ? `${g}%` : "–"} hint={`Letter ${letter(g)}`} />
         <Stat label="Absences (28d)" value={att.get(sid)?.absent ?? 0} />
       </div>
+      <section className="card mt-6 max-w-2xl">
+        <h2 className="mb-4 text-sm font-semibold">Guardian</h2>
+        {user.role === "admin" ? (
+          <GuardianEditForm
+            initial={{
+              id: student.id,
+              guardianName: student.guardianName ?? "",
+              guardianPhone: formatPkMobile(student.guardianPhone),
+              guardianCnic: student.guardianCnic ?? "",
+            }}
+          />
+        ) : (
+          // Teachers can contact the guardian, but the ID card number is admin-only and never sent to them.
+          <dl className="grid gap-3 text-sm sm:grid-cols-2">
+            <div><dt className="label">Name</dt><dd>{student.guardianName ?? <span className="text-muted">Not recorded</span>}</dd></div>
+            <div>
+              <dt className="label">Mobile</dt>
+              <dd>{student.guardianPhone ? <a className="text-brand hover:underline" href={telHref(student.guardianPhone)}>{formatPkMobile(student.guardianPhone)}</a> : <span className="text-muted">Not recorded</span>}</dd>
+            </div>
+          </dl>
+        )}
+      </section>
+
       <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <section>
           <h2 className="mb-3 text-sm font-semibold">Assessments</h2>

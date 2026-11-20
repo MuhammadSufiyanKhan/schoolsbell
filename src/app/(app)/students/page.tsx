@@ -3,7 +3,8 @@ import { requireUser } from "@/lib/session";
 import { visibleStudents, visibleClasses } from "@/lib/scope";
 import { attendanceRates, gradeAverages, letter } from "@/lib/analytics";
 import { Badge, Empty, PageHeader, Table } from "@/components/ui";
-import { addStudent } from "./actions";
+import { formatPkMobile, telHref } from "@/lib/pk";
+import { EnrolForm } from "./enrol-form";
 
 export default async function StudentsPage({
   searchParams,
@@ -44,7 +45,7 @@ export default async function StudentsPage({
           <thead>
             <tr>
               <th className="th">Roll no</th><th className="th">Name</th><th className="th">Class</th>
-              <th className="th">Attendance</th><th className="th">Grade</th>
+              <th className="th">Guardian</th><th className="th">Attendance</th><th className="th">Grade</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
@@ -57,6 +58,14 @@ export default async function StudentsPage({
                   <td className="td text-muted">{s.rollNo}</td>
                   <td className="td font-medium"><Link className="hover:underline" href={`/students/${s.id}`}>{s.name}</Link></td>
                   <td className="td">{c ? `${c.name}-${c.section}` : "–"}</td>
+                  <td className="td">
+                    {s.guardianName || s.guardianPhone ? (
+                      <>
+                        <p>{s.guardianName ?? "—"}</p>
+                        {s.guardianPhone && <a href={telHref(s.guardianPhone)} className="text-xs text-brand hover:underline">{formatPkMobile(s.guardianPhone)}</a>}
+                      </>
+                    ) : <span className="text-muted">—</span>}
+                  </td>
                   <td className="td"><Badge tone={a == null ? "neutral" : a >= 90 ? "good" : a >= 85 ? "warn" : "bad"}>{a ?? "–"}%</Badge></td>
                   <td className="td">{g ?? "–"}% <span className="text-muted">({letter(g)})</span></td>
                 </tr>
@@ -66,32 +75,7 @@ export default async function StudentsPage({
         </Table>
       )}
 
-      {user.role === "admin" && (
-        <section className="card mt-8 max-w-xl">
-          <h2 className="mb-4 text-sm font-semibold">Enrol a new student</h2>
-          <form action={addStudent} className="grid gap-3 sm:grid-cols-2">
-            <div className="sm:col-span-2">
-              <label className="label" htmlFor="name">Full name</label>
-              <input id="name" name="name" required className="input" />
-            </div>
-            <div>
-              <label className="label" htmlFor="rollNo">Roll no</label>
-              <input id="rollNo" name="rollNo" required className="input" />
-            </div>
-            <div>
-              <label className="label" htmlFor="classId">Class</label>
-              <select id="classId" name="classId" required className="input">
-                {classes.map((c) => <option key={c.id} value={c.id}>{c.name}-{c.section}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="label" htmlFor="dob">Date of birth</label>
-              <input id="dob" name="dob" type="date" className="input" />
-            </div>
-            <div className="flex items-end"><button className="btn w-full">Add student</button></div>
-          </form>
-        </section>
-      )}
+      {user.role === "admin" && <EnrolForm classes={classes.map((c) => ({ id: c.id, label: `${c.name}-${c.section}` }))} />}
     </>
   );
 }
