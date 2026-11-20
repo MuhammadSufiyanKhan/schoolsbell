@@ -1,6 +1,7 @@
 "use client";
 import { useActionState } from "react";
 import { GuardianFields } from "@/components/profile-fields";
+import { ParentLoginNotice } from "@/components/parent-login-notice";
 import { addStudent } from "./actions";
 
 export function EnrolForm({ classes }: { classes: { id: number; label: string }[] }) {
@@ -37,6 +38,7 @@ export function EnrolForm({ classes }: { classes: { id: number; label: string }[
           {state?.error && <span role="alert" className="text-sm text-bad">{state.error}</span>}
         </div>
       </form>
+      <ParentLoginNotice login={state?.parent} />
     </section>
   );
 }

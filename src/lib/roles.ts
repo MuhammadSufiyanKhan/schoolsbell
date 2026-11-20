@@ -15,6 +15,7 @@ export const NAV: NavItem[] = [
   { href: "/classes", label: "Classes", icon: "school", roles: ["admin", "teacher"] },
   { href: "/courses", label: "Courses", icon: "book-open", roles: ["admin", "teacher", "student"] },
   { href: "/people", label: "People", icon: "user-cog", roles: ["admin"] },
+  { href: "/parents", label: "Parents", icon: "users-round", roles: ["admin"] },
   { href: "/attendance", label: "Attendance", icon: "calendar-check", roles: ["admin", "teacher", "student", "parent"] },
   { href: "/grades", label: "Grades", icon: "graduation-cap", roles: ["admin", "teacher", "student", "parent"] },
   { href: "/fees", label: "Fees", icon: "wallet", roles: ["admin", "student", "parent"] },

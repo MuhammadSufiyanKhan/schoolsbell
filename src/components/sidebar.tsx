@@ -13,6 +13,7 @@ import {
   Sparkles,
   BookOpen,
   UserCog,
+  UsersRound,
   type LucideIcon,
 } from "lucide-react";
 
@@ -27,6 +28,7 @@ const ICONS: Record<string, LucideIcon> = {
   sparkles: Sparkles,
   "book-open": BookOpen,
   "user-cog": UserCog,
+  "users-round": UsersRound,
 };
 
 export function Sidebar({ items }: { items: { href: string; label: string; icon: string }[] }) {

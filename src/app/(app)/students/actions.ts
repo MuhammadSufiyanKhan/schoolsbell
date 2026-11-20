@@ -5,8 +5,9 @@ import { z } from "zod";
 import { db, schema } from "@/db";
 import { requireUser } from "@/lib/session";
 import { parseGuardian } from "@/lib/profile";
+import { ensureParentAccount, type ParentLogin } from "@/lib/parents";
 
-export type EnrolState = { error?: string; ok?: string; values?: Record<string, string>; at?: number } | undefined;
+export type EnrolState = { error?: string; ok?: string; parent?: ParentLogin; values?: Record<string, string>; at?: number } | undefined;
 
 const Input = z.object({
   name: z.string().trim().min(2, "Enter the student's name.").max(120),
@@ -32,8 +33,18 @@ export async function addStudent(_prev: EnrolState, form: FormData): Promise<Enr
   const [dupe] = await db.select({ id: schema.students.id }).from(schema.students).where(and(eq(schema.students.schoolId, user.schoolId), eq(schema.students.classId, cls.id), eq(schema.students.rollNo, data.rollNo))).limit(1);
   if (dupe) return fail(`Roll number ${data.rollNo} is already used in ${cls.name}-${cls.section}.`);
 
-  await db.insert(schema.students).values({ schoolId: user.schoolId, name: data.name, rollNo: data.rollNo, classId: cls.id, dob: data.dob ?? null, ...guardian.value });
+  const [student] = await db.insert(schema.students).values({ schoolId: user.schoolId, name: data.name, rollNo: data.rollNo, classId: cls.id, dob: data.dob ?? null, ...guardian.value }).returning();
   await db.insert(schema.auditLog).values({ schoolId: user.schoolId, userId: user.id, action: "student.create", detail: `${data.name} (${data.rollNo})` });
+
+  // A guardian mobile number automatically gives the guardian (parent) a login.
+  let parent: ParentLogin | undefined;
+  if (guardian.value.guardianPhone || guardian.value.guardianName) {
+    parent = await ensureParentAccount(user.schoolId, { id: student.id, name: student.name, guardianId: null }, { name: guardian.value.guardianName, phone: guardian.value.guardianPhone });
+    if (parent.kind === "created") {
+      await db.insert(schema.auditLog).values({ schoolId: user.schoolId, userId: user.id, action: "parent.auto_create", detail: `for student ${student.id}` });
+    }
+  }
   revalidatePath("/students");
-  return { ok: `${data.name} was enrolled in ${cls.name}-${cls.section}.`, at: Date.now() };
+  revalidatePath("/parents");
+  return { ok: `${data.name} was enrolled in ${cls.name}-${cls.section}.`, parent, at: Date.now() };
 }

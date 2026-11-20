@@ -5,17 +5,12 @@ import { SignJWT, jwtVerify } from "jose";
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import type { Role } from "./roles";
+import { getSecretString } from "./secret-key";
 
 const COOKIE = "sb_session";
 const MAX_AGE = 60 * 60 * 24 * 7;
 
-function secret() {
-  const s = process.env.SESSION_SECRET;
-  if (!s && process.env.NODE_ENV === "production") {
-    throw new Error("SESSION_SECRET must be set in production");
-  }
-  return new TextEncoder().encode(s ?? "dev-only-insecure-secret-change-me-please-32b");
-}
+const secret = () => new TextEncoder().encode(getSecretString());
 
 export type SessionUser = {
   id: number;

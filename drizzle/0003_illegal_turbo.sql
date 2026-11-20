@@ -1,0 +1,2 @@
+ALTER TABLE "users" ADD COLUMN "initial_password_enc" text;--> statement-breakpoint
+CREATE UNIQUE INDEX "users_parent_phone_idx" ON "users" USING btree ("school_id","phone") WHERE "users"."role" = 'parent';

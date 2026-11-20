@@ -7,8 +7,8 @@ export function LoginForm() {
   return (
     <form key={state?.at ?? 0} action={action} className="space-y-4">
       <div>
-        <label className="label" htmlFor="email">Email</label>
-        <input id="email" name="email" type="email" autoComplete="username" defaultValue={state?.email ?? "admin@school.test"} required className="input" />
+        <label className="label" htmlFor="email">Email or mobile number</label>
+        <input id="email" name="email" type="text" inputMode="email" autoComplete="username" defaultValue={state?.email ?? "admin@school.test"} required className="input" />
       </div>
       <div>
         <label className="label" htmlFor="password">Password</label>

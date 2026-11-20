@@ -7,11 +7,15 @@ import { db, schema } from "@/db";
 import { requireUser } from "@/lib/session";
 import { generatePassword } from "@/lib/passwords";
 import { parseGuardian, parseStaff } from "@/lib/profile";
+import { ensureParentAccount, setParentPassword, type ParentLogin } from "@/lib/parents";
+import { encryptSecret } from "@/lib/secrets";
 
 export type CredState =
   | {
       error?: string;
       created?: { name: string; email: string; role: string; password: string };
+      /** Set when saving a student's guardian details created/linked a parent login. */
+      parent?: ParentLogin;
       /** What the user typed, returned on error so the form isn't wiped. */
       values?: Record<string, string>;
       at?: number;
@@ -78,10 +82,25 @@ export async function createUser(_prev: CredState, form: FormData): Promise<Cred
 
   const password = generatePassword();
   const passwordHash = await bcrypt.hash(password, 10);
-  const [u] = await db.insert(schema.users).values({ schoolId: me.schoolId, name: d.name, email: d.email, passwordHash, role: d.role, ...(staff ?? {}) }).returning();
+  const [u] = await db
+    .insert(schema.users)
+    .values({
+      schoolId: me.schoolId, name: d.name, email: d.email, passwordHash, role: d.role, ...(staff ?? {}),
+      // Parents' first password stays viewable by administrators (encrypted) until the parent changes it.
+      initialPasswordEnc: d.role === "parent" ? encryptSecret(password) : null,
+    })
+    .returning();
 
+  // Entering a guardian mobile number automatically gives the guardian (parent) a login.
+  let parent: ParentLogin | undefined;
   if (d.role === "student") {
-    await db.insert(schema.students).values({ schoolId: me.schoolId, userId: u.id, classId: classId!, name: d.name, rollNo: d.rollNo!, ...(guardian ?? {}) });
+    const [st] = await db.insert(schema.students).values({ schoolId: me.schoolId, userId: u.id, classId: classId!, name: d.name, rollNo: d.rollNo!, ...(guardian ?? {}) }).returning();
+    if (guardian?.guardianPhone || guardian?.guardianName) {
+      parent = await ensureParentAccount(me.schoolId, { id: st.id, name: st.name, guardianId: null }, { name: guardian.guardianName, phone: guardian.guardianPhone });
+      if (parent.kind === "created") {
+        await db.insert(schema.auditLog).values({ schoolId: me.schoolId, userId: me.id, action: "parent.auto_create", detail: `for student ${st.id}` });
+      }
+    }
   }
   if (linkStudent) {
     await db.update(schema.students).set({ guardianId: u.id }).where(and(eq(schema.students.id, linkStudent), eq(schema.students.schoolId, me.schoolId)));
@@ -91,7 +110,7 @@ export async function createUser(_prev: CredState, form: FormData): Promise<Cred
   revalidatePath("/people");
   revalidatePath("/students");
   // The one-time password is returned to this browser only, never stored in plain text or logged.
-  return { created: { name: d.name, email: d.email, role: d.role, password }, at: Date.now() };
+  return { created: { name: d.name, email: d.email, role: d.role, password }, parent, at: Date.now() };
 }
 
 export async function changeRole(form: FormData) {
@@ -120,7 +139,8 @@ export async function resetPassword(_prev: CredState, form: FormData): Promise<C
   if (target.role === "admin" && !me.isOwner) return { error: "Only the principal can reset an administrator's password." };
 
   const password = generatePassword();
-  await db.update(schema.users).set({ passwordHash: await bcrypt.hash(password, 10) }).where(eq(schema.users.id, id));
+  if (target.role === "parent") await setParentPassword(id, password);
+  else await db.update(schema.users).set({ passwordHash: await bcrypt.hash(password, 10), initialPasswordEnc: null }).where(eq(schema.users.id, id));
   await db.insert(schema.auditLog).values({ schoolId: me.schoolId, userId: me.id, action: "user.password_reset", detail: target.email });
   return { created: { name: target.name, email: target.email, role: target.role, password } };
 }

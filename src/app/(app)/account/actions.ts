@@ -24,7 +24,8 @@ export async function changePassword(_prev: PwState, form: FormData): Promise<Pw
   if (!row || !(await bcrypt.compare(parsed.data.current, row.passwordHash))) return { error: "Current password is incorrect." };
   if (parsed.data.next === parsed.data.current) return { error: "Choose a password different from the current one." };
 
-  await db.update(schema.users).set({ passwordHash: await bcrypt.hash(parsed.data.next, 10) }).where(eq(schema.users.id, user.id));
+  // Once the owner picks their own password, the administrator-viewable initial one is erased.
+  await db.update(schema.users).set({ passwordHash: await bcrypt.hash(parsed.data.next, 10), initialPasswordEnc: null }).where(eq(schema.users.id, user.id));
   await db.insert(schema.auditLog).values({ schoolId: user.schoolId, userId: user.id, action: "user.password_change" });
   return { ok: true };
 }

@@ -5,8 +5,9 @@ import { z } from "zod";
 import { db, schema } from "@/db";
 import { requireUser } from "@/lib/session";
 import { parseGuardian } from "@/lib/profile";
+import { ensureParentAccount, type ParentLogin } from "@/lib/parents";
 
-export type GuardianState = { error?: string; ok?: boolean; values?: Record<string, string>; at?: number } | undefined;
+export type GuardianState = { error?: string; ok?: boolean; parent?: ParentLogin; values?: Record<string, string>; at?: number } | undefined;
 
 /** Admin-only: guardian contact details include the guardian's CNIC. */
 export async function updateGuardian(_prev: GuardianState, form: FormData): Promise<GuardianState> {
@@ -23,9 +24,20 @@ export async function updateGuardian(_prev: GuardianState, form: FormData): Prom
     .where(and(eq(schema.students.id, id.data), eq(schema.students.schoolId, me.schoolId)))
     .returning();
   if (!updated.length) return { error: "Student not found.", values, at: Date.now() };
+  const student = updated[0];
+
+  // Saving a guardian mobile number creates (or links, or corrects) the parent login automatically.
+  let parent: ParentLogin | undefined;
+  if (parsed.value.guardianPhone || parsed.value.guardianName) {
+    parent = await ensureParentAccount(me.schoolId, { id: student.id, name: student.name, guardianId: student.guardianId }, { name: parsed.value.guardianName, phone: parsed.value.guardianPhone });
+    if (parent.kind === "created") {
+      await db.insert(schema.auditLog).values({ schoolId: me.schoolId, userId: me.id, action: "parent.auto_create", detail: `for student ${student.id}` });
+    }
+  }
   // Audit the fact of the change, not the sensitive values.
   await db.insert(schema.auditLog).values({ schoolId: me.schoolId, userId: me.id, action: "student.guardian_update", detail: `student ${id.data}` });
   revalidatePath(`/students/${id.data}`);
   revalidatePath("/students");
-  return { ok: true, at: Date.now() };
+  revalidatePath("/parents");
+  return { ok: true, parent, at: Date.now() };
 }

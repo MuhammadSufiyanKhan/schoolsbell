@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/session";
 import { ROLE_LABEL } from "@/lib/roles";
 import { Badge, PageHeader, Table } from "@/components/ui";
 import { formatPkMobile } from "@/lib/pk";
+import { isAutoParentEmail } from "@/lib/parents";
 import { changeRole } from "./actions";
 import { CreateUserForm, ResetPasswordButton } from "./forms";
 
@@ -51,7 +52,7 @@ export default async function PeoplePage() {
                         <p className="mt-1 flex flex-wrap gap-1">{u.specializations.map((sp) => <Badge key={sp} tone="brand">{sp}</Badge>)}</p>
                       )}
                     </td>
-                    <td className="td text-muted">{u.email}</td>
+                    <td className="td text-muted">{isAutoParentEmail(u.email) ? "Signs in with mobile number" : u.email}</td>
                     <td className="td">
                       {u.isOwner ? (
                         <Badge tone="brand">Principal</Badge>

@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   pgTable,
   pgEnum,
@@ -46,9 +47,18 @@ export const users = pgTable(
     cnic: text("cnic"),
     /** Subjects a teacher is qualified to teach (free text, e.g. ["Mathematics", "Physics"]). */
     specializations: jsonb("specializations").$type<string[]>().notNull().default([]),
+    /**
+     * Parent accounts only: the auto-generated first password, AES-GCM encrypted (see lib/secrets.ts) so an
+     * administrator can hand it over. Set to NULL the moment the parent changes their password.
+     */
+    initialPasswordEnc: text("initial_password_enc"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
-  (t) => [uniqueIndex("users_email_idx").on(t.email)],
+  (t) => [
+    uniqueIndex("users_email_idx").on(t.email),
+    // One parent account per mobile number per school (a parent with several children is ONE account).
+    uniqueIndex("users_parent_phone_idx").on(t.schoolId, t.phone).where(sql`${t.role} = 'parent'`),
+  ],
 );
 
 export const classes = pgTable("classes", {

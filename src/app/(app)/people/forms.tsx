@@ -2,6 +2,7 @@
 import { useActionState, useState } from "react";
 import { createUser, resetPassword, type CredState } from "./actions";
 import { GuardianFields, StaffFields } from "@/components/profile-fields";
+import { ParentLoginNotice } from "@/components/parent-login-notice";
 
 function Credentials({ c }: { c: NonNullable<NonNullable<CredState>["created"]> }) {
   const [copied, setCopied] = useState(false);
@@ -97,6 +98,7 @@ export function CreateUserForm({ classes, students, canCreateAdmin, suggestions 
       </form>
       {state?.error && <p role="alert" className="mt-3 text-sm text-bad">{state.error}</p>}
       {state?.created && <Credentials c={state.created} />}
+      {state?.created && <ParentLoginNotice login={state.parent} />}
     </section>
   );
 }
