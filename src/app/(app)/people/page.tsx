@@ -71,6 +71,7 @@ export default async function PeoplePage() {
                     </td>
                     <td className="td">
                       <div className="flex flex-col items-end gap-2">
+                        {u.role === "teacher" && <Link href={`/teachers/${u.id}`} className="text-xs text-brand hover:underline">View profile</Link>}
                         {(u.role === "teacher" || u.id === me.id || (me.isOwner && u.role === "admin")) && (
                           <Link href={`/people/${u.id}`} className="text-xs text-brand hover:underline">Edit details</Link>
                         )}
