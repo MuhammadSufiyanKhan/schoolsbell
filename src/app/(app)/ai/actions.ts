@@ -16,7 +16,8 @@ const SYSTEM =
   "Everything you write is a DRAFT that the teacher will review.";
 
 async function run(prompt: string): Promise<AiState> {
-  if (!process.env.AI_GATEWAY_API_KEY && !process.env.VERCEL_OIDC_TOKEN) {
+  // On Vercel the AI Gateway authenticates via OIDC automatically; elsewhere a key is needed.
+  if (!process.env.AI_GATEWAY_API_KEY && !process.env.VERCEL) {
     return { error: "AI is not configured. Set AI_GATEWAY_API_KEY (or deploy on Vercel with AI Gateway enabled)." };
   }
   try {
