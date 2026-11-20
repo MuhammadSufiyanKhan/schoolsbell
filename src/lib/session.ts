@@ -23,6 +23,8 @@ export type SessionUser = {
   name: string;
   email: string;
   role: Role;
+  /** The principal who registered the school. */
+  isOwner: boolean;
 };
 
 export async function createSession(userId: number) {
@@ -51,7 +53,7 @@ export async function getUser(): Promise<SessionUser | null> {
     const { payload } = await jwtVerify(token, secret());
     const [u] = await db.select().from(schema.users).where(eq(schema.users.id, Number(payload.uid))).limit(1);
     if (!u) return null;
-    return { id: u.id, schoolId: u.schoolId, name: u.name, email: u.email, role: u.role };
+    return { id: u.id, schoolId: u.schoolId, name: u.name, email: u.email, role: u.role, isOwner: u.isOwner };
   } catch {
     return null;
   }

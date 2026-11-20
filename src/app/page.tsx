@@ -17,7 +17,7 @@ export default function Home() {
         <span className="flex items-center gap-2 text-lg font-semibold">
           <span className="grid size-8 place-items-center rounded-lg bg-brand text-brand-fg">🔔</span> SchoolsBell
         </span>
-        <Link href="/login" className="btn">Sign in</Link>
+        <div className="flex gap-2"><Link href="/login" className="btn-ghost">Sign in</Link><Link href="/register" className="btn">Register your school</Link></div>
       </header>
 
       <main>
@@ -28,7 +28,8 @@ export default function Home() {
             Attendance, grades, fees and communication for administrators, teachers, students and parents, in one calm, fast system.
           </p>
           <div className="mt-8 flex justify-center gap-3">
-            <Link href="/login" className="btn !px-6 !py-3">Try the live demo</Link>
+            <Link href="/register" className="btn !px-6 !py-3">Register your school</Link>
+            <Link href="/login" className="btn-ghost !px-6 !py-3">Try the demo</Link>
           </div>
         </section>
 

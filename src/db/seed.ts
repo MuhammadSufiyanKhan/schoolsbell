@@ -1,4 +1,5 @@
 import bcrypt from "bcryptjs";
+import { eq } from "drizzle-orm";
 import { db } from "./index";
 import { runMigrations } from "./migrate";
 import {
@@ -26,6 +27,8 @@ async function main() {
   await runMigrations();
   const existing = await db.select().from(schools).limit(1);
   if (existing.length) {
+    // Idempotent backfill for databases seeded before the owner flag existed.
+    await db.update(users).set({ isOwner: true }).where(eq(users.email, "admin@school.test"));
     console.log("Database already seeded — skipping.");
     return;
   }
@@ -35,7 +38,7 @@ async function main() {
   const [school] = await db.insert(schools).values({ name: "Greenfield Academy" }).returning();
   const sid = school.id;
 
-  const [admin] = await db.insert(users).values({ schoolId: sid, name: "Principal Rahman", email: "admin@school.test", passwordHash: hash, role: "admin" }).returning();
+  const [admin] = await db.insert(users).values({ schoolId: sid, name: "Principal Rahman", email: "admin@school.test", passwordHash: hash, role: "admin", isOwner: true }).returning();
   const teacherRows = await db.insert(users).values([
     { schoolId: sid, name: "Ms. Farah Noor", email: "teacher@school.test", passwordHash: hash, role: "teacher" as const },
     { schoolId: sid, name: "Mr. Daniel Cruz", email: "cruz@school.test", passwordHash: hash, role: "teacher" as const },

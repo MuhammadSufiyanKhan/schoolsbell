@@ -24,6 +24,9 @@ export default async function LoginPage() {
           <p className="mb-5 mt-1 text-sm text-muted">Use your school account to continue.</p>
           <LoginForm />
         </div>
+        <p className="mt-4 text-center text-sm text-muted">
+          New school? <Link href="/register" className="text-brand hover:underline">Register your school</Link>
+        </p>
         <div className="mt-4 rounded-xl border border-dashed border-border p-4 text-xs text-muted">
           <p className="mb-2 font-medium text-foreground">
             Demo accounts (password: <code>password123</code>)

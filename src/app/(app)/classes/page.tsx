@@ -1,40 +1,109 @@
-import { count, eq, inArray } from "drizzle-orm";
+import { and, count, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireUser } from "@/lib/session";
 import { visibleClasses } from "@/lib/scope";
 import { Empty, PageHeader } from "@/components/ui";
+import { addSubject, assignSubjectTeacher, createClass, setClassTeacher } from "./actions";
+
+function TeacherSelect({ teachers, value, name = "teacherId", label }: { teachers: { id: number; name: string }[]; value?: number | null; name?: string; label: string }) {
+  return (
+    <select name={name} defaultValue={value ?? ""} className="input !w-auto !py-1 text-xs" aria-label={label}>
+      <option value="">— unassigned —</option>
+      {teachers.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+    </select>
+  );
+}
 
 export default async function ClassesPage() {
   const user = await requireUser(["admin", "teacher"]);
+  const isAdmin = user.role === "admin";
   const classes = await visibleClasses(user);
   const ids = classes.map((c) => c.id);
-  const [counts, subjects, teachers] = ids.length
-    ? await Promise.all([
-        db.select({ classId: schema.students.classId, n: count() }).from(schema.students).where(inArray(schema.students.classId, ids)).groupBy(schema.students.classId),
-        db.select({ classId: schema.subjects.classId, name: schema.subjects.name, teacher: schema.users.name })
-          .from(schema.subjects).leftJoin(schema.users, eq(schema.users.id, schema.subjects.teacherId)).where(inArray(schema.subjects.classId, ids)),
-        db.select().from(schema.users).where(eq(schema.users.schoolId, user.schoolId)),
-      ])
-    : [[], [], []];
+  const [counts, subjects, teachers] = await Promise.all([
+    ids.length ? db.select({ classId: schema.students.classId, n: count() }).from(schema.students).where(inArray(schema.students.classId, ids)).groupBy(schema.students.classId) : [],
+    ids.length ? db.select().from(schema.subjects).where(inArray(schema.subjects.classId, ids)).orderBy(schema.subjects.name) : [],
+    db.select({ id: schema.users.id, name: schema.users.name }).from(schema.users).where(and(eq(schema.users.schoolId, user.schoolId), eq(schema.users.role, "teacher"))).orderBy(schema.users.name),
+  ]);
   const tName = new Map(teachers.map((t) => [t.id, t.name]));
 
   return (
     <>
-      <PageHeader title="Classes" subtitle="Sections, class teachers and subject teachers." />
+      <PageHeader title="Classes" subtitle={isAdmin ? "Create classes, add subjects and assign teachers." : "Sections, class teachers and subject teachers."} />
+
+      {isAdmin && (
+        <section className="card mb-8 max-w-2xl">
+          <h2 className="mb-3 text-sm font-semibold">New class</h2>
+          <form action={createClass} className="grid gap-3 sm:grid-cols-4">
+            <div className="sm:col-span-2"><label className="label" htmlFor="c-name">Name</label><input id="c-name" name="name" required placeholder="Grade 9" className="input" /></div>
+            <div><label className="label" htmlFor="c-section">Section</label><input id="c-section" name="section" required placeholder="A" className="input" /></div>
+            <div>
+              <label className="label" htmlFor="c-teacher">Class teacher</label>
+              <select id="c-teacher" name="teacherId" className="input" defaultValue="">
+                <option value="">— none —</option>
+                {teachers.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+            </div>
+            <div className="sm:col-span-4"><button className="btn">Create class</button></div>
+          </form>
+          {teachers.length === 0 && <p className="mt-3 text-xs text-muted">No teachers yet. Add them under People first, then assign them here.</p>}
+        </section>
+      )}
+
       {classes.length === 0 ? (
-        <Empty>No classes assigned to you yet.</Empty>
+        <Empty>{isAdmin ? "No classes yet. Create your first class above." : "No classes assigned to you yet."}</Empty>
       ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {classes.map((c) => (
             <article key={c.id} className="card">
-              <h2 className="text-lg font-semibold">{c.name} – {c.section}</h2>
-              <p className="text-sm text-muted">Class teacher: {c.teacherId ? tName.get(c.teacherId) : "—"}</p>
-              <p className="mt-3 text-2xl font-semibold tabular-nums">{counts.find((x) => x.classId === c.id)?.n ?? 0} <span className="text-sm font-normal text-muted">students</span></p>
-              <ul className="mt-3 space-y-1 border-t border-border pt-3 text-sm">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-semibold">{c.name} – {c.section}</h2>
+                  <p className="text-sm text-muted">{counts.find((x) => x.classId === c.id)?.n ?? 0} students</p>
+                </div>
+              </div>
+
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+                <span className="text-muted">Class teacher:</span>
+                {isAdmin ? (
+                  <form action={setClassTeacher} className="flex items-center gap-2">
+                    <input type="hidden" name="classId" value={c.id} />
+                    <TeacherSelect teachers={teachers} value={c.teacherId} label={`Class teacher for ${c.name}-${c.section}`} />
+                    <button className="btn-ghost !py-1 text-xs">Save</button>
+                  </form>
+                ) : (
+                  <span>{c.teacherId ? tName.get(c.teacherId) : "—"}</span>
+                )}
+              </div>
+
+              <ul className="mt-3 divide-y divide-border border-t border-border text-sm">
                 {subjects.filter((s) => s.classId === c.id).map((s) => (
-                  <li key={s.name} className="flex justify-between"><span>{s.name}</span><span className="text-muted">{s.teacher}</span></li>
+                  <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                    <span className="font-medium">{s.name}</span>
+                    {isAdmin ? (
+                      <form action={assignSubjectTeacher} className="flex items-center gap-2">
+                        <input type="hidden" name="subjectId" value={s.id} />
+                        <TeacherSelect teachers={teachers} value={s.teacherId} label={`Teacher for ${s.name}`} />
+                        <button className="btn-ghost !py-1 text-xs">Assign</button>
+                      </form>
+                    ) : (
+                      <span className="text-muted">{s.teacherId ? tName.get(s.teacherId) : "—"}</span>
+                    )}
+                  </li>
                 ))}
+                {subjects.every((s) => s.classId !== c.id) && <li className="py-2 text-muted">No subjects yet.</li>}
               </ul>
+
+              {isAdmin && (
+                <form action={addSubject} className="mt-3 flex flex-wrap items-end gap-2 border-t border-border pt-3">
+                  <input type="hidden" name="classId" value={c.id} />
+                  <div className="min-w-32 flex-1">
+                    <label className="label" htmlFor={`s-${c.id}`}>Add subject</label>
+                    <input id={`s-${c.id}`} name="name" required placeholder="e.g. Physics" className="input" />
+                  </div>
+                  <TeacherSelect teachers={teachers} label={`Teacher for the new subject in ${c.name}-${c.section}`} />
+                  <button className="btn !py-2">Add</button>
+                </form>
+              )}
             </article>
           ))}
         </div>

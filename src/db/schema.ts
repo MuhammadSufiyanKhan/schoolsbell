@@ -8,6 +8,8 @@ import {
   date,
   timestamp,
   real,
+  boolean,
+  jsonb,
   uniqueIndex,
   index,
 } from "drizzle-orm/pg-core";
@@ -37,6 +39,8 @@ export const users = pgTable(
     email: varchar("email", { length: 255 }).notNull(),
     passwordHash: text("password_hash").notNull(),
     role: roleEnum("role").notNull(),
+    // The principal who registered the school. Only the owner can create/promote other admins.
+    isOwner: boolean("is_owner").notNull().default(false),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (t) => [uniqueIndex("users_email_idx").on(t.email)],
@@ -135,3 +139,99 @@ export const auditLog = pgTable("audit_log", {
   detail: text("detail"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+// ───────────────────────── LMS ─────────────────────────
+
+export const questionKindEnum = pgEnum("question_kind", ["mcq", "short"]);
+export const attemptStatusEnum = pgEnum("attempt_status", ["submitted", "ai_graded", "graded"]);
+
+export const materials = pgTable("materials", {
+  id: serial("id").primaryKey(),
+  schoolId: integer("school_id").notNull().references(() => schools.id),
+  subjectId: integer("subject_id").notNull().references(() => subjects.id, { onDelete: "cascade" }),
+  authorId: integer("author_id").notNull().references(() => users.id),
+  title: text("title").notNull(),
+  body: text("body"),
+  url: text("url"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const assignments = pgTable("assignments", {
+  id: serial("id").primaryKey(),
+  schoolId: integer("school_id").notNull().references(() => schools.id),
+  subjectId: integer("subject_id").notNull().references(() => subjects.id, { onDelete: "cascade" }),
+  assessmentId: integer("assessment_id").references(() => assessments.id, { onDelete: "set null" }),
+  title: text("title").notNull(),
+  instructions: text("instructions").notNull(),
+  dueDate: date("due_date").notNull(),
+  maxScore: real("max_score").notNull().default(100),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const submissions = pgTable(
+  "submissions",
+  {
+    id: serial("id").primaryKey(),
+    assignmentId: integer("assignment_id").notNull().references(() => assignments.id, { onDelete: "cascade" }),
+    studentId: integer("student_id").notNull().references(() => students.id, { onDelete: "cascade" }),
+    answer: text("answer").notNull(),
+    submittedAt: timestamp("submitted_at").defaultNow().notNull(),
+    score: real("score"),
+    feedback: text("feedback"),
+    gradedAt: timestamp("graded_at"),
+    aiAssisted: boolean("ai_assisted").notNull().default(false),
+  },
+  (t) => [uniqueIndex("submissions_assignment_student_idx").on(t.assignmentId, t.studentId)],
+);
+
+export const tests = pgTable("tests", {
+  id: serial("id").primaryKey(),
+  schoolId: integer("school_id").notNull().references(() => schools.id),
+  subjectId: integer("subject_id").notNull().references(() => subjects.id, { onDelete: "cascade" }),
+  assessmentId: integer("assessment_id").references(() => assessments.id, { onDelete: "set null" }),
+  title: text("title").notNull(),
+  instructions: text("instructions"),
+  published: boolean("published").notNull().default(false),
+  aiGenerated: boolean("ai_generated").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const testQuestions = pgTable("test_questions", {
+  id: serial("id").primaryKey(),
+  testId: integer("test_id").notNull().references(() => tests.id, { onDelete: "cascade" }),
+  position: integer("position").notNull().default(0),
+  kind: questionKindEnum("kind").notNull(),
+  prompt: text("prompt").notNull(),
+  options: jsonb("options").$type<string[]>(), // mcq only
+  correctIndex: integer("correct_index"), // mcq only
+  modelAnswer: text("model_answer"), // short answer: what a full-marks answer contains
+  points: real("points").notNull().default(1),
+});
+
+export const testAttempts = pgTable(
+  "test_attempts",
+  {
+    id: serial("id").primaryKey(),
+    testId: integer("test_id").notNull().references(() => tests.id, { onDelete: "cascade" }),
+    studentId: integer("student_id").notNull().references(() => students.id, { onDelete: "cascade" }),
+    submittedAt: timestamp("submitted_at").defaultNow().notNull(),
+    status: attemptStatusEnum("status").notNull().default("submitted"),
+    totalScore: real("total_score"),
+  },
+  (t) => [uniqueIndex("attempts_test_student_idx").on(t.testId, t.studentId)],
+);
+
+export const testAnswers = pgTable(
+  "test_answers",
+  {
+    id: serial("id").primaryKey(),
+    attemptId: integer("attempt_id").notNull().references(() => testAttempts.id, { onDelete: "cascade" }),
+    questionId: integer("question_id").notNull().references(() => testQuestions.id, { onDelete: "cascade" }),
+    selectedIndex: integer("selected_index"),
+    answerText: text("answer_text"),
+    score: real("score"),
+    feedback: text("feedback"),
+    aiGraded: boolean("ai_graded").notNull().default(false),
+  },
+  (t) => [uniqueIndex("answers_attempt_question_idx").on(t.attemptId, t.questionId)],
+);

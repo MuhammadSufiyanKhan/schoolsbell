@@ -11,6 +11,8 @@ import {
   Wallet,
   Megaphone,
   Sparkles,
+  BookOpen,
+  UserCog,
   type LucideIcon,
 } from "lucide-react";
 
@@ -23,6 +25,8 @@ const ICONS: Record<string, LucideIcon> = {
   wallet: Wallet,
   megaphone: Megaphone,
   sparkles: Sparkles,
+  "book-open": BookOpen,
+  "user-cog": UserCog,
 };
 
 export function Sidebar({ items }: { items: { href: string; label: string; icon: string }[] }) {

@@ -24,13 +24,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </Link>
         <Sidebar items={items} />
         <div className="mt-4 hidden border-t border-border pt-4 md:absolute md:bottom-4 md:left-4 md:right-4 md:block">
-          <p className="truncate text-sm font-medium">{user.name}</p>
-          <p className="mb-2 text-xs text-muted">{ROLE_LABEL[user.role]}</p>
+          <Link href="/account" className="block truncate text-sm font-medium hover:underline">{user.name}</Link>
+          <p className="mb-2 text-xs text-muted">{user.isOwner ? "Principal" : ROLE_LABEL[user.role]}</p>
           <form action={logout}>
             <button className="btn-ghost w-full"><LogOut className="size-4" aria-hidden /> Sign out</button>
           </form>
         </div>
-        <form action={logout} className="mt-3 md:hidden">
+        <Link href="/account" className="mt-3 block text-center text-sm text-muted hover:text-foreground md:hidden">My account</Link>
+        <form action={logout} className="mt-2 md:hidden">
           <button className="btn-ghost w-full"><LogOut className="size-4" aria-hidden /> Sign out ({user.name})</button>
         </form>
       </aside>

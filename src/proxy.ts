@@ -5,7 +5,7 @@ import type { NextRequest } from "next/server";
 export function proxy(req: NextRequest) {
   const hasSession = req.cookies.has("sb_session");
   const { pathname } = req.nextUrl;
-  const isPublic = pathname === "/" || pathname.startsWith("/login");
+  const isPublic = pathname === "/" || pathname.startsWith("/login") || pathname.startsWith("/register");
   if (!hasSession && !isPublic) {
     return NextResponse.redirect(new URL("/login", req.url));
   }
