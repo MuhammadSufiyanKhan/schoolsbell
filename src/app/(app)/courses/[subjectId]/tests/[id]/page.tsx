@@ -9,6 +9,7 @@ import { AI_NOTICES } from "@/lib/ai";
 import { sumPoints } from "@/lib/tests";
 import { Badge, Empty, PageHeader, Table } from "@/components/ui";
 import { addQuestion, aiGradeAll, deleteQuestion, saveQuestion, setPublished, submitAttempt, updateTestDetails } from "./actions";
+import { idParam } from "@/lib/ids";
 
 type Q = typeof schema.testQuestions.$inferSelect;
 
@@ -61,8 +62,8 @@ export default async function TestPage({
   const user = await requireUser(["admin", "teacher", "student"]);
   const { subjectId: sid, id } = await params;
   const sp = await searchParams;
-  const { subject, cls, mode, student } = await requireCourse(user, Number(sid));
-  const [test] = await db.select().from(schema.tests).where(and(eq(schema.tests.id, Number(id)), eq(schema.tests.subjectId, subject.id))).limit(1);
+  const { subject, cls, mode, student } = await requireCourse(user, idParam(sid));
+  const [test] = await db.select().from(schema.tests).where(and(eq(schema.tests.id, idParam(id)), eq(schema.tests.subjectId, subject.id))).limit(1);
   if (!test || (mode === "learn" && !test.published)) notFound();
   const questions = await db.select().from(schema.testQuestions).where(eq(schema.testQuestions.testId, test.id)).orderBy(schema.testQuestions.position, schema.testQuestions.id);
   const total = sumPoints(questions);

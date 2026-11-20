@@ -15,6 +15,7 @@ const DUMMY_HASH = bcrypt.hashSync("not-a-real-password", 10);
 export type LoginState = { error?: string; email?: string; at?: number } | undefined;
 
 const BAD = "Incorrect email/mobile number or password.";
+const MAX_PHONE_CANDIDATES = 25;
 
 /**
  * Sign in with an email address, or (for parents) the mobile number registered as the guardian's contact.
@@ -34,8 +35,15 @@ export async function login(_prev: LoginState, form: FormData): Promise<LoginSta
   } else {
     const phone = parsePkMobile(identifier);
     if (!phone.ok || !phone.value) return fail("Enter a valid email address or Pakistani mobile number (e.g. 0300-1234567).");
-    // The same mobile can be a parent in more than one school; the password decides which account it is.
-    candidates = await db.select().from(schema.users).where(and(eq(schema.users.phone, phone.value), eq(schema.users.role, "parent"))).limit(5);
+    // The same mobile can be a parent in more than one school (e.g. siblings at different schools); the
+    // password decides which account it is. Ordered so the result is deterministic, and capped so a number
+    // shared by an absurd number of schools can't force unbounded password hashing on every attempt.
+    candidates = await db
+      .select()
+      .from(schema.users)
+      .where(and(eq(schema.users.phone, phone.value), eq(schema.users.role, "parent")))
+      .orderBy(schema.users.id)
+      .limit(MAX_PHONE_CANDIDATES);
   }
 
   let user: (typeof candidates)[number] | undefined;

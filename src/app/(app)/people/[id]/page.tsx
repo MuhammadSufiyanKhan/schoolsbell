@@ -8,11 +8,12 @@ import { formatPkMobile } from "@/lib/pk";
 import { Badge, PageHeader } from "@/components/ui";
 import { canEditStaff } from "@/lib/permissions";
 import { StaffEditForm } from "./edit-form";
+import { idParam } from "@/lib/ids";
 
 export default async function EditPersonPage({ params }: { params: Promise<{ id: string }> }) {
   const me = await requireUser(["admin"]);
   const { id } = await params;
-  const [target] = await db.select().from(schema.users).where(and(eq(schema.users.id, Number(id)), eq(schema.users.schoolId, me.schoolId))).limit(1);
+  const [target] = await db.select().from(schema.users).where(and(eq(schema.users.id, idParam(id)), eq(schema.users.schoolId, me.schoolId))).limit(1);
   if (!target || target.role === "student" || target.role === "parent" || !canEditStaff(me, target)) notFound();
 
   const [subjects, assigned] = await Promise.all([

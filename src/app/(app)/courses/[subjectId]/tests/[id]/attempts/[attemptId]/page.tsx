@@ -9,6 +9,7 @@ import { AI_NOTICES } from "@/lib/ai";
 import { sumPoints } from "@/lib/tests";
 import { Badge, PageHeader } from "@/components/ui";
 import { aiGradeOne, releaseMarks } from "./actions";
+import { idParam } from "@/lib/ids";
 
 const NOTICES: Record<string, string> = {
   ...AI_NOTICES,
@@ -26,11 +27,11 @@ export default async function AttemptReview({
   const user = await requireUser(["admin", "teacher"]);
   const { subjectId: sid, id, attemptId } = await params;
   const sp = await searchParams;
-  const { subject } = await requireCourse(user, Number(sid), "manage");
+  const { subject } = await requireCourse(user, idParam(sid), "manage");
 
-  const [test] = await db.select().from(schema.tests).where(and(eq(schema.tests.id, Number(id)), eq(schema.tests.subjectId, subject.id))).limit(1);
+  const [test] = await db.select().from(schema.tests).where(and(eq(schema.tests.id, idParam(id)), eq(schema.tests.subjectId, subject.id))).limit(1);
   if (!test) notFound();
-  const [attempt] = await db.select().from(schema.testAttempts).where(and(eq(schema.testAttempts.id, Number(attemptId)), eq(schema.testAttempts.testId, test.id))).limit(1);
+  const [attempt] = await db.select().from(schema.testAttempts).where(and(eq(schema.testAttempts.id, idParam(attemptId)), eq(schema.testAttempts.testId, test.id))).limit(1);
   if (!attempt) notFound();
   const [student] = await db.select().from(schema.students).where(eq(schema.students.id, attempt.studentId)).limit(1);
 

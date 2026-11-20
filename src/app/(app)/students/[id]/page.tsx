@@ -8,11 +8,12 @@ import { attendanceRates, gradeAverages, letter, riskReasons } from "@/lib/analy
 import { Badge, PageHeader, Stat, Table } from "@/components/ui";
 import { formatPkMobile, telHref } from "@/lib/pk";
 import { GuardianEditForm } from "./guardian-form";
+import { idParam } from "@/lib/ids";
 
 export default async function StudentDetail({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser(["admin", "teacher"]);
   const { id } = await params;
-  const sid = Number(id);
+  const sid = idParam(id);
   const allowed = await visibleStudents(user);
   const student = allowed.find((s) => s.id === sid);
   if (!student) notFound();

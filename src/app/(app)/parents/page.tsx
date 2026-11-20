@@ -2,7 +2,9 @@ import Link from "next/link";
 import { eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireUser } from "@/lib/session";
-import { formatPkMobile } from "@/lib/pk";
+import { formatPkMobile, telHref } from "@/lib/pk";
+import { isAutoParentEmail } from "@/lib/parents";
+import { summarizeParent } from "@/lib/parent-details";
 import { Badge, Empty, PageHeader, Table } from "@/components/ui";
 import { RevealButton, ResetButton } from "./credential-buttons";
 
@@ -16,7 +18,16 @@ export default async function ParentsPage() {
   const ids = parents.map((p) => p.id);
   const kids = ids.length
     ? await db
-        .select({ id: schema.students.id, name: schema.students.name, guardianId: schema.students.guardianId, cls: schema.classes.name, section: schema.classes.section })
+        .select({
+          id: schema.students.id,
+          name: schema.students.name,
+          guardianId: schema.students.guardianId,
+          guardianName: schema.students.guardianName,
+          guardianPhone: schema.students.guardianPhone,
+          guardianCnic: schema.students.guardianCnic,
+          cls: schema.classes.name,
+          section: schema.classes.section,
+        })
         .from(schema.students)
         .leftJoin(schema.classes, eq(schema.classes.id, schema.students.classId))
         .where(inArray(schema.students.guardianId, ids))
@@ -33,17 +44,40 @@ export default async function ParentsPage() {
       ) : (
         <Table>
           <thead>
-            <tr><th className="th">Parent</th><th className="th">Login</th><th className="th">Children</th><th className="th">Password</th><th className="th text-right">Actions</th></tr>
+            <tr>
+              <th className="th">Parent</th>
+              <th className="th">Mobile</th>
+              <th className="th">ID card (CNIC)</th>
+              <th className="th">Children</th>
+              <th className="th">Password</th>
+              <th className="th text-right">Actions</th>
+            </tr>
           </thead>
           <tbody className="divide-y divide-border align-top">
             {parents.map((p) => {
               const children = kids.filter((k) => k.guardianId === p.id);
+              const info = summarizeParent(p, children);
               const canReveal = !!p.initialPasswordEnc;
               return (
                 <tr key={p.id}>
-                  <td className="td font-medium">{p.name}</td>
                   <td className="td">
-                    {p.phone ? <span>{formatPkMobile(p.phone)} <span className="text-xs text-muted">(mobile)</span></span> : <span className="break-all">{p.email}</span>}
+                    <p className="font-medium">{p.name}</p>
+                    {!isAutoParentEmail(p.email) && <p className="break-all text-xs text-muted">{p.email}</p>}
+                    <Link href={`/parents/${p.id}`} className="mt-1 inline-block text-xs text-brand hover:underline">View details</Link>
+                  </td>
+                  <td className="td whitespace-nowrap">
+                    {info.mobile ? (
+                      <>
+                        <a href={telHref(info.mobile)} className="hover:underline">{formatPkMobile(info.mobile)}</a>
+                        {p.phone && <span className="block text-xs text-muted">login</span>}
+                      </>
+                    ) : <span className="text-muted">—</span>}
+                  </td>
+                  <td className="td whitespace-nowrap">
+                    {info.cnics.length === 0 ? <span className="text-muted">—</span> : (
+                      <ul className="space-y-0.5">{info.cnics.map((c) => <li key={c} className="tabular-nums">{c}</li>)}</ul>
+                    )}
+                    {info.cnicConflict && <Badge tone="warn">Differs between children</Badge>}
                   </td>
                   <td className="td">
                     {children.length === 0 ? <span className="text-muted">None linked</span> : (

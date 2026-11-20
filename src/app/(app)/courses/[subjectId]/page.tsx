@@ -7,6 +7,7 @@ import { requireCourse } from "@/lib/lms";
 import { Badge, Empty, PageHeader } from "@/components/ui";
 import { addAssignment, addMaterial, createBlankTest, deleteMaterial } from "./actions";
 import { AiTestForm } from "./ai-test-form";
+import { idParam } from "@/lib/ids";
 
 const NOTICES: Record<string, string> = {
   bad_url: "That link isn't valid. Links must start with http:// or https://.",
@@ -23,7 +24,7 @@ export default async function CoursePage({
   const user = await requireUser(["admin", "teacher", "student"]);
   const { subjectId: sid } = await params;
   const sp = await searchParams;
-  const { subject, cls, mode, student } = await requireCourse(user, Number(sid));
+  const { subject, cls, mode, student } = await requireCourse(user, idParam(sid));
   const manage = mode === "manage";
   const subjectId = subject.id;
 

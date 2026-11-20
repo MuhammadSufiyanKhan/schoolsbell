@@ -8,6 +8,7 @@ import { requireCourse } from "@/lib/lms";
 import { AI_NOTICES } from "@/lib/ai";
 import { Badge, PageHeader } from "@/components/ui";
 import { gradeSubmission, submitAssignment, suggestWithAi } from "./actions";
+import { idParam } from "@/lib/ids";
 
 export default async function AssignmentPage({
   params,
@@ -19,8 +20,8 @@ export default async function AssignmentPage({
   const user = await requireUser(["admin", "teacher", "student"]);
   const { subjectId: sid, id } = await params;
   const sp = await searchParams;
-  const { subject, cls, mode, student } = await requireCourse(user, Number(sid));
-  const [a] = await db.select().from(schema.assignments).where(and(eq(schema.assignments.id, Number(id)), eq(schema.assignments.subjectId, subject.id))).limit(1);
+  const { subject, cls, mode, student } = await requireCourse(user, idParam(sid));
+  const [a] = await db.select().from(schema.assignments).where(and(eq(schema.assignments.id, idParam(id)), eq(schema.assignments.subjectId, subject.id))).limit(1);
   if (!a) notFound();
   const back = `/courses/${subject.id}`;
   const notice = sp.error ? AI_NOTICES[sp.error] : undefined;
