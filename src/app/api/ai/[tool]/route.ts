@@ -13,7 +13,7 @@ const RS = "\u001e";
 
 const json = (body: unknown, status: number) => Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
 
-const STATUS: Record<AiFailure, number> = { not_configured: 503, billing: 503, auth: 503, model: 503, rate_limit: 429, timeout: 504, empty: 502, unknown: 502 };
+const STATUS: Record<AiFailure, number> = { not_configured: 503, billing: 503, auth: 503, model: 503, rate_limit: 429, overloaded: 503, timeout: 504, empty: 502, unknown: 502 };
 
 export async function POST(req: Request, { params }: { params: Promise<{ tool: string }> }) {
   // Cookies are SameSite=Lax (which already blocks cross-site POSTs); also refuse a mismatched Origin outright.
