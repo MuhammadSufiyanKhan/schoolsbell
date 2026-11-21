@@ -49,6 +49,17 @@ export async function POST(req: Request) {
     );
   } catch (e) {
     const kind = classifyAiError(e);
+    // Reading photos uses a separate (vision) model; naming GROQ_MODEL here would send the administrator to the wrong setting.
+    if (kind === "model" && lesson?.images.length) {
+      return jsonResponse(
+        {
+          error:
+            "The AI model that reads photos isn't available (Groq retires models). You can still generate a test from a PDF or from typed instructions. An administrator should set GROQ_VISION_MODEL to a current vision model from console.groq.com/docs/vision.",
+          kind,
+        },
+        503,
+      );
+    }
     return jsonResponse({ error: aiErrorMessage(e), kind }, STATUS[kind]);
   }
 }

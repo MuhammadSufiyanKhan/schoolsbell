@@ -71,6 +71,7 @@ export function resolveCandidates(): LanguageModel[] {
  * GROQ_VISION_MODEL pins one (no fallback), like GROQ_MODEL does for text.
  */
 export const GROQ_VISION_MODELS = ["meta-llama/llama-4-scout-17b-16e-instruct", "meta-llama/llama-4-maverick-17b-128e-instruct"];
+// Groq retires models; if both are gone, set GROQ_VISION_MODEL (see console.groq.com/docs/vision).
 export function resolveVisionCandidates(): LanguageModel[] {
   const apiKey = process.env.GROQ_API_KEY?.trim();
   if (!apiKey) throw new AiUnavailableError("GROQ_API_KEY is not set.");
