@@ -2,6 +2,7 @@ import { requireUser } from "@/lib/session";
 import { visibleStudents } from "@/lib/scope";
 import { PageHeader } from "@/components/ui";
 import { AiTool, Field, Select } from "./panel";
+import { ExamGenerator } from "./exam-generator";
 
 export default async function AiPage() {
   const user = await requireUser(["admin", "teacher"]);
@@ -9,20 +10,15 @@ export default async function AiPage() {
 
   return (
     <>
-      <PageHeader title="AI Assistant" subtitle="Draft lesson plans, quizzes, report comments and parent messages in seconds. You stay in control: everything is a draft." />
+      <PageHeader title="AI Assistant" subtitle="Draft lesson plans, tests (with PDF download), report comments and parent messages in seconds. You stay in control: everything is a draft." />
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <ExamGenerator />
+
         <AiTool tool="lesson" title="Lesson plan" description="A timed, differentiated plan with an exit ticket.">
           <Field label="Grade" name="grade" defaultValue="Grade 7" />
           <Field label="Subject" name="subject" defaultValue="Science" />
           <div className="sm:col-span-2"><Field label="Topic" name="topic" placeholder="e.g. Photosynthesis" /></div>
           <Field label="Minutes" name="minutes" type="number" defaultValue={45} min={10} max={180} />
-        </AiTool>
-
-        <AiTool tool="quiz" title="Quiz generator" description="Questions, answer key and marking rubric.">
-          <Field label="Grade" name="grade" defaultValue="Grade 7" />
-          <Field label="Questions" name="count" type="number" defaultValue={8} min={3} max={20} />
-          <div className="sm:col-span-2"><Field label="Topic" name="topic" placeholder="e.g. Fractions and decimals" /></div>
-          <Select label="Type" name="kind" options={[{ value: "mixed", label: "Mixed" }, { value: "multiple choice", label: "Multiple choice" }, { value: "short answer", label: "Short answer" }]} />
         </AiTool>
 
         <AiTool tool="comment" title="Report card comment" description="Uses attendance and grade averages. Only the student's first name and aggregate numbers are sent to the AI.">

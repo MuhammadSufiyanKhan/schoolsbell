@@ -25,7 +25,9 @@ Demo accounts (password `password123`): `admin@school.test`, `teacher@school.tes
 | Announcements (audience-targeted) | ✅ | ✅ | read |
 | AI assistant | ✅ | ✅ | – |
 
-**AI assistant:** lesson plans, quizzes, report-card comments, parent messages. Output is always a draft. Prompts never contain a student's surname, roll number or ID, only the first name and aggregate numbers.
+**Test generator:** a teacher uploads a lesson (PDF, or a photo of the page), describes the test in a prompt, chooses how many multiple-choice, short and long-answer questions, and downloads a print-ready A4 PDF, plus a teacher copy with the answer key and marking guide. PDFs are rendered with Puppeteer; photos are read by a Groq vision model (Llama 4), PDF text is extracted on the server. Scanned PDFs (no text) must be uploaded as photos.
+
+**AI assistant:** lesson plans, report-card comments, parent messages. Output is always a draft. Prompts never contain a student's surname, roll number or ID, only the first name and aggregate numbers.
 
 ## Configuration
 
@@ -37,6 +39,8 @@ Copy `.env.example` to `.env.local`.
 | `SESSION_SECRET` | **Required in production** (the app refuses to start without it) |
 | `GROQ_API_KEY` | **Groq** key ([get one](https://console.groq.com/keys)). All AI features run on Groq; without it the AI pages say it isn't set up |
 | `GROQ_MODEL` | Optional pin. Unset = tries `openai/gpt-oss-120b`, `openai/gpt-oss-20b`, `moonshotai/kimi-k2-instruct-0905` in turn and remembers the one that works |
+| `GROQ_VISION_MODEL` | Optional pin for photographed lessons. Unset = Llama 4 Scout, then Maverick |
+| `CHROME_PATH` | Only for PDF export outside Vercel, if Chrome/Chromium isn't in a standard place |
 | `AI_REASONING` | `none`/`minimal`/`low`/`medium`/`high` (default `low`). Higher thinks longer before answering |
 | `AI_TIMEOUT_SECONDS`, `AI_FIRST_CHUNK_SECONDS`, `AI_CHUNK_GAP_SECONDS` | Hard time limits (defaults 120 / 60 / 30): a stuck model gives a clear message instead of hanging |
 
