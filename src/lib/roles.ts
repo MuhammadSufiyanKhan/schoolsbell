@@ -14,6 +14,7 @@ export const NAV: NavItem[] = [
   { href: "/students", label: "Students", icon: "users", roles: ["admin", "teacher"] },
   { href: "/classes", label: "Classes", icon: "school", roles: ["admin", "teacher"] },
   { href: "/courses", label: "Courses", icon: "book-open", roles: ["admin", "teacher", "student"] },
+  { href: "/promotions", label: "Promotions", icon: "arrow-up-circle", roles: ["admin"] },
   { href: "/people", label: "People", icon: "user-cog", roles: ["admin"] },
   { href: "/teachers", label: "Teachers", icon: "user-check", roles: ["admin"] },
   { href: "/parents", label: "Parents", icon: "users-round", roles: ["admin"] },

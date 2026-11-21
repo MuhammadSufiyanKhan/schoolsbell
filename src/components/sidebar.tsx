@@ -15,6 +15,7 @@ import {
   UserCog,
   UsersRound,
   UserCheck,
+  ArrowUpCircle,
   type LucideIcon,
 } from "lucide-react";
 
@@ -31,6 +32,7 @@ const ICONS: Record<string, LucideIcon> = {
   "user-cog": UserCog,
   "users-round": UsersRound,
   "user-check": UserCheck,
+  "arrow-up-circle": ArrowUpCircle,
 };
 
 export function Sidebar({ items }: { items: { href: string; label: string; icon: string }[] }) {
