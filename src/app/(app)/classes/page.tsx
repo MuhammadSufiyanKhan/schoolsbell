@@ -1,5 +1,6 @@
 import { and, count, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
+import Link from "next/link";
 import { requireUser } from "@/lib/session";
 import { visibleClasses } from "@/lib/scope";
 import { Empty, PageHeader } from "@/components/ui";
@@ -72,9 +73,10 @@ export default async function ClassesPage() {
             <article key={c.id} className="card">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h2 className="text-lg font-semibold">{c.name} – {c.section}</h2>
+                  <h2 className="text-lg font-semibold"><Link href={`/classes/${c.id}`} className="hover:underline">{c.name} – {c.section}</Link></h2>
                   <p className="text-sm text-muted">{counts.find((x) => x.classId === c.id)?.n ?? 0} students</p>
                 </div>
+                <Link href={`/classes/${c.id}`} className="btn-ghost !py-1 text-xs" data-testid={`view-class-${c.id}`}>View students</Link>
               </div>
 
               <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
