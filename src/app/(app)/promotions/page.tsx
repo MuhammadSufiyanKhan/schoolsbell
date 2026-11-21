@@ -2,7 +2,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireUser } from "@/lib/session";
 import { Empty, PageHeader } from "@/components/ui";
-import { sortClasses, suggestTarget } from "@/lib/promotion";
+import { nextGradeName, sortClasses, suggestTarget } from "@/lib/promotion";
 import { PromotionForm } from "./promotion-form";
 import { undoLastPromotion } from "./actions";
 
@@ -24,10 +24,17 @@ export default async function PromotionsPage({ searchParams }: { searchParams: P
 
   const sorted = sortClasses(classRows);
   const label = (c: { name: string; section: string }) => `${c.name} – ${c.section}`;
-  const classes = sorted.map((c) => ({
+  const classes = sorted.map((c) => {
+    const existing = suggestTarget(c, sorted);
+    const nextName = nextGradeName(c.name);
+    const wantsNew = !existing && nextName && !sorted.some((x) => x.name === nextName && x.section === c.section);
+    return { c, existing, nextName, wantsNew };
+  }).map(({ c, existing, nextName, wantsNew }) => ({
     id: c.id,
     label: label(c),
-    suggested: String(suggestTarget(c, sorted)?.id ?? ""),
+    // Existing next-grade class if there is one; otherwise offer to create it, so "Grade 1" always has somewhere to go.
+    suggested: existing ? String(existing.id) : wantsNew ? "new" : "",
+    newLabel: wantsNew && nextName ? `${nextName} – ${c.section}` : null,
     students: students.filter((s) => s.classId === c.id).map((s) => ({ id: s.id, name: s.name, rollNo: s.rollNo })),
   }));
 
@@ -38,7 +45,7 @@ export default async function PromotionsPage({ searchParams }: { searchParams: P
 
   const result = one(sp.result);
   const banner =
-    result === "done" ? { ok: true, text: `Promoted ${n(sp.moved)} student${n(sp.moved) === 1 ? "" : "s"}.${n(sp.stale) ? ` ${n(sp.stale)} were skipped because their class had changed in the meantime.` : ""}` }
+    result === "done" ? { ok: true, text: `Promoted ${n(sp.moved)} student${n(sp.moved) === 1 ? "" : "s"}.${n(sp.created) ? ` Created ${n(sp.created)} new class${n(sp.created) === 1 ? "" : "es"} for them.` : ""}${n(sp.stale) ? ` ${n(sp.stale)} were skipped because their class had changed in the meantime.` : ""}` }
     : result === "none" ? { ok: false, text: "Nothing to promote: choose where each class goes, and leave at least one student ticked." }
     : result === "undone" ? { ok: true, text: `Undone: ${n(sp.moved)} student${n(sp.moved) === 1 ? "" : "s"} moved back.${n(sp.skipped) ? ` ${n(sp.skipped)} were left alone because they had been moved since.` : ""}` }
     : result === "nothing-to-undo" ? { ok: false, text: "There is no promotion to undo." }
@@ -66,7 +73,7 @@ export default async function PromotionsPage({ searchParams }: { searchParams: P
       ) : (
         <>
           <p className="mb-4 text-sm text-muted">
-            Each class is pre-set to move to the next grade in the same section (Grade 1 – A → Grade 2 – A) when that class exists. Change it, or choose &ldquo;Don&apos;t move&rdquo;.
+            Each class is pre-set to move to the next grade in the same section (Grade 1 – A → Grade 2 – A). If that class doesn&apos;t exist yet, it is created for you. Change it, or choose &ldquo;Don&apos;t move&rdquo;.
             Attendance, grades and fees stay with each student. Subjects belong to a class, so students see their new class&apos;s courses.
           </p>
           <PromotionForm classes={classes} targets={classes.map((c) => ({ id: c.id, label: c.label }))} />

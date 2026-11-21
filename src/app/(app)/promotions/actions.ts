@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireUser } from "@/lib/session";
-import { planMoves, type Move } from "@/lib/promotion";
+import { nextGradeName, planMoves, type Move } from "@/lib/promotion";
 
 const MAX_MOVES = 5000;
 
@@ -29,11 +29,38 @@ export async function promoteStudents(form: FormData) {
     .where(and(eq(schema.students.schoolId, user.schoolId), inArray(schema.students.id, planned.map((m) => m.studentId))));
   const current = new Map(students.map((s) => [s.id, s.classId]));
 
-  const moves: Move[] = [];
+  const moves: (Omit<Move, "to"> & { to: number | null })[] = [];
   let stale = 0;
+  let created = 0;
+  const made = new Map<number, number>(); // source class → the next-grade class we created or found
   for (const m of planned) {
-    const ok = current.get(m.studentId) === m.from && classIds.has(m.from) && (m.to === null || classIds.has(m.to));
-    if (ok) moves.push(m);
+    const valid = current.get(m.studentId) === m.from && classIds.has(m.from);
+    if (!valid) {
+      stale++;
+      continue;
+    }
+    if (m.to === "new") {
+      let target = made.get(m.from);
+      if (target === undefined) {
+        const [src] = await db.select({ name: schema.classes.name, section: schema.classes.section }).from(schema.classes).where(and(eq(schema.classes.id, m.from), eq(schema.classes.schoolId, user.schoolId))).limit(1);
+        const name = src && nextGradeName(src.name);
+        if (!src || !name) {
+          stale++;
+          continue;
+        }
+        // Reuse a class with that name and section if one appeared meanwhile; otherwise create it.
+        const [have] = await db.select({ id: schema.classes.id }).from(schema.classes).where(and(eq(schema.classes.schoolId, user.schoolId), eq(schema.classes.name, name), eq(schema.classes.section, src.section))).limit(1);
+        if (have) target = have.id;
+        else {
+          const [row] = await db.insert(schema.classes).values({ schoolId: user.schoolId, name, section: src.section }).returning();
+          target = row.id;
+          created++;
+          await db.insert(schema.auditLog).values({ schoolId: user.schoolId, userId: user.id, action: "class.create", detail: `${name}-${src.section} (created by promotion)` });
+        }
+        made.set(m.from, target);
+      }
+      moves.push({ ...m, to: target });
+    } else if (m.to === null || classIds.has(m.to)) moves.push({ ...m, to: m.to });
     else stale++;
   }
 
@@ -57,7 +84,7 @@ export async function promoteStudents(form: FormData) {
   revalidatePath("/students");
   revalidatePath("/classes");
   revalidatePath("/dashboard");
-  redirect(`/promotions?result=done&moved=${moves.length}&stale=${stale}`);
+  redirect(`/promotions?result=done&moved=${moves.length}&stale=${stale}&created=${created}`);
 }
 
 /** Undo the most recent promotion, but only for students who are still where that promotion put them. */

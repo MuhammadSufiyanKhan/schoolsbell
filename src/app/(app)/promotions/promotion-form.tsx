@@ -6,7 +6,8 @@ import { promoteStudents } from "./actions";
 export type PClass = {
   id: number;
   label: string;
-  suggested: string; // "" | class id | "graduate"
+  suggested: string; // "" | class id | "new" | "graduate"
+  newLabel: string | null; // the class that "new" would create, e.g. "Grade 2 – A"
   students: { id: number; name: string; rollNo: string }[];
 };
 export type PTarget = { id: number; label: string };
@@ -56,6 +57,7 @@ export function PromotionForm({ classes, targets }: { classes: PClass[]; targets
                   <label className="label" htmlFor={selId}>Promote to</label>
                   <select id={selId} name={`to_${c.id}`} className="input !py-1.5 text-sm" value={to[c.id]} onChange={(e) => setTo((p) => ({ ...p, [c.id]: e.target.value }))}>
                     <option value="">Don&apos;t move this class</option>
+                    {c.newLabel && <option value="new">Create &ldquo;{c.newLabel}&rdquo; and move them there</option>}
                     {targets.filter((t) => t.id !== c.id).map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
                     <option value="graduate">Graduated (leaves the school&apos;s classes)</option>
                   </select>
