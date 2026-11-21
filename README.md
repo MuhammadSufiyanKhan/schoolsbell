@@ -36,7 +36,9 @@ Copy `.env.example` to `.env.local`.
 | `DATABASE_URL` | Postgres (Neon etc.). Empty = embedded PGlite in `.data/` for local dev |
 | `SESSION_SECRET` | **Required in production** (the app refuses to start without it) |
 | `GOOGLE_GENERATIVE_AI_API_KEY` | **Google Gemini** key ([get one](https://aistudio.google.com/apikey)). When set, all AI features use Gemini directly |
-| `GEMINI_MODEL` | Optional Gemini model name (default `gemini-2.5-flash`) |
+| `GEMINI_MODEL` | Optional Gemini model name. Unset = the app tries `gemini-flash-latest`, `gemini-3.8-flash`, `gemini-2.5-flash` in turn and remembers the one that works |
+| `AI_REASONING` | `none`/`minimal`/`low`/`medium`/`high` (default `low`). Higher thinks longer before answering |
+| `AI_TIMEOUT_SECONDS`, `AI_FIRST_CHUNK_SECONDS`, `AI_CHUNK_GAP_SECONDS` | Hard time limits (defaults 120 / 60 / 30): a stuck model gives a clear message instead of hanging |
 | `AI_GATEWAY_API_KEY` / `AI_MODEL` | Fallback when no Gemini key is set: Vercel AI Gateway (needs a payment card on the Vercel account). Without any key the AI pages explain what is missing |
 
 ### Deploying to Vercel
