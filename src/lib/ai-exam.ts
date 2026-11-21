@@ -74,8 +74,14 @@ export function cleanExam(raw: z.infer<typeof ModelExam>, req: ExamRequest): Exa
   };
 }
 
-/** Groq vision models accept at most 5 images per request, so photos are read in batches. */
-export const IMAGES_PER_CALL = 5;
+/**
+ * Groq vision models cap images per request (Llama 4: 5; the Qwen model seen in production: 3), so photos are read in
+ * small batches. 3 is safe for all; GROQ_VISION_MAX_IMAGES raises it for a model that allows more.
+ */
+export const imagesPerCall = () => {
+  const n = Number(process.env.GROQ_VISION_MAX_IMAGES);
+  return Number.isInteger(n) && n >= 1 && n <= 5 ? n : 3;
+};
 
 const TRANSCRIBE_INSTRUCTIONS =
   "You transcribe photographed school lesson pages. Copy ALL readable text faithfully, in reading order, keeping headings, lists and equations, " +
@@ -85,7 +91,8 @@ const TRANSCRIBE_INSTRUCTIONS =
 /** Read photos with a vision model, 5 at a time (in parallel), and return their text in page order. */
 export async function transcribeImages(images: LessonBundle["images"], model?: LanguageModel): Promise<string> {
   const batches: LessonBundle["images"][] = [];
-  for (let i = 0; i < images.length; i += IMAGES_PER_CALL) batches.push(images.slice(i, i + IMAGES_PER_CALL));
+  const per = imagesPerCall();
+  for (let i = 0; i < images.length; i += per) batches.push(images.slice(i, i + per));
   const one = async (batch: LessonBundle["images"], start: number) => {
     const run = (m: LanguageModel, retries: number) =>
       generateText({
@@ -107,10 +114,10 @@ export async function transcribeImages(images: LessonBundle["images"], model?: L
     return text.trim();
   };
   const parts: string[] = [];
-  // Up to 4 vision calls at once keeps 20 photos quick without tripping rate limits.
-  for (let i = 0; i < batches.length; i += 4) {
-    const group = batches.slice(i, i + 4);
-    parts.push(...(await Promise.all(group.map((b, j) => one(b, (i + j) * IMAGES_PER_CALL)))));
+  // Two vision calls at once: quick enough, and gentle on Groq's tokens-per-minute limit for image models.
+  for (let i = 0; i < batches.length; i += 2) {
+    const group = batches.slice(i, i + 2);
+    parts.push(...(await Promise.all(group.map((b, j) => one(b, (i + j) * per)))));
   }
   const all = parts.join("\n\n");
   if (all.replace(/---\s*Photo\s*\d+\s*---/gi, "").replace(/\s/g, "").length < 20) throw new AiEmptyError("No readable text was found in the photos.");
