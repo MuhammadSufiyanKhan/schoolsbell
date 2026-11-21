@@ -2,7 +2,7 @@ import { aiErrorMessage, classifyAiError, type AiFailure } from "@/lib/ai";
 import { generateExam } from "@/lib/ai-exam";
 import { jsonResponse, staffOnly } from "@/lib/api-guard";
 import { ExamRequest } from "@/lib/exam-types";
-import { LessonError, readLesson } from "@/lib/lesson-source";
+import { LessonError, readLessons } from "@/lib/lesson-source";
 
 export const maxDuration = 180;
 export const dynamic = "force-dynamic";
@@ -23,14 +23,14 @@ export async function POST(req: Request) {
   const parsed = ExamRequest.safeParse(Object.fromEntries([...form].filter(([, v]) => typeof v === "string")));
   if (!parsed.success) return jsonResponse({ error: parsed.error.issues[0]?.message ?? "Please check the form." }, 400);
 
-  const file = form.get("lesson");
-  const hasFile = file instanceof File && file.size > 0;
+  const files = form.getAll("lesson").filter((f): f is File => f instanceof File && f.size > 0);
+  const hasFile = files.length > 0;
   if (!hasFile && !parsed.data.prompt) return jsonResponse({ error: "Describe the test you want, or upload a lesson (PDF or photo)." }, 400);
 
   let lesson = null;
   if (hasFile) {
     try {
-      lesson = await readLesson(file, parsed.data.pages);
+      lesson = await readLessons(files, parsed.data.pages);
     } catch (e) {
       if (e instanceof LessonError) return jsonResponse({ error: e.message }, 400);
       console.error("[exam] could not read upload:", e instanceof Error ? e.name : "error");
@@ -43,7 +43,7 @@ export async function POST(req: Request) {
     return jsonResponse(
       {
         exam,
-        notice: lesson?.kind === "text" && lesson.truncated ? "The lesson was long, so only the first part was used. Choose a page range to cover the rest." : null,
+        notice: lesson?.truncated ? "The lesson was long, so only the first part was used. Choose a page range to cover the rest." : null,
       },
       200,
     );

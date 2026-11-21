@@ -5,6 +5,8 @@ export type Lesson =
   | { kind: "text"; text: string; truncated: boolean; pages: number }
   | { kind: "image"; mediaType: "image/png" | "image/jpeg" | "image/webp"; data: Uint8Array };
 
+export const MAX_FILES = 20;
+export const MAX_TOTAL_BYTES = 40 * 1024 * 1024;
 export const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
 /** Groq accepts at most 4 MB of base64 per image (~3 MB of bytes). */
 export const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
@@ -71,4 +73,29 @@ export async function readLesson(file: File, pageSpec = ""): Promise<Lesson> {
     if (truncated) text = text.slice(0, MAX_LESSON_CHARS);
     return { kind: "text", text, truncated, pages: chosen.length };
   }
+}
+
+/** Everything the teacher uploaded: PDF text (joined) and any photos, in the order given. */
+export type LessonBundle = { text: string | null; images: Extract<Lesson, { kind: "image" }>[]; truncated: boolean };
+
+export async function readLessons(files: File[], pageSpec = ""): Promise<LessonBundle> {
+  if (files.length > MAX_FILES) throw new LessonError(`Please upload at most ${MAX_FILES} files at once.`);
+  if (files.reduce((n, f) => n + f.size, 0) > MAX_TOTAL_BYTES) throw new LessonError("The files together are too large (limit 40 MB). Upload fewer or smaller photos.");
+  const texts: string[] = [];
+  const images: LessonBundle["images"] = [];
+  let truncated = false;
+  for (const f of files) {
+    const l = await readLesson(f, pageSpec);
+    if (l.kind === "image") images.push(l);
+    else {
+      texts.push(l.text);
+      truncated ||= l.truncated;
+    }
+  }
+  let text = texts.length ? texts.join("\n\n") : null;
+  if (text && text.length > MAX_LESSON_CHARS) {
+    text = text.slice(0, MAX_LESSON_CHARS);
+    truncated = true;
+  }
+  return { text, images, truncated };
 }

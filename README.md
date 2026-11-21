@@ -25,7 +25,7 @@ Demo accounts (password `password123`): `admin@school.test`, `teacher@school.tes
 | Announcements (audience-targeted) | ✅ | ✅ | read |
 | AI assistant | ✅ | ✅ | – |
 
-**Test generator:** a teacher uploads a lesson (PDF, or a photo of the page), describes the test in a prompt, chooses how many multiple-choice, short and long-answer questions, and downloads a print-ready A4 PDF, plus a teacher copy with the answer key and marking guide. PDFs are rendered with Puppeteer; photos are read by a Groq vision model (Llama 4), PDF text is extracted on the server. Scanned PDFs (no text) must be uploaded as photos.
+**Test generator:** a teacher uploads a lesson (PDF, or a photo of the page), describes the test in a prompt, chooses how many multiple-choice, short and long-answer questions, and downloads a print-ready A4 PDF, plus a teacher copy with the answer key and marking guide. PDFs are rendered with Puppeteer; up to 20 photos at once are read by a Groq vision model (Llama 4, five per request, in parallel) and PDF text is extracted on the server; the exam is then written from the combined text. Scanned PDFs (no text) must be uploaded as photos.
 
 **AI assistant:** lesson plans, report-card comments, parent messages. Output is always a draft. Prompts never contain a student's surname, roll number or ID, only the first name and aggregate numbers.
 

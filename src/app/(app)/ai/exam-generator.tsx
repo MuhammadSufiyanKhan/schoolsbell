@@ -3,7 +3,10 @@ import { useEffect, useId, useRef, useState } from "react";
 import { Check, Copy, Download, FileText, Sparkles, Square, Upload, X } from "lucide-react";
 import type { Exam, PaperMeta } from "@/lib/exam-types";
 
-const MAX_BYTES = 8 * 1024 * 1024;
+const MAX_FILES = 20;
+const MAX_PDF_BYTES = 8 * 1024 * 1024;
+const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
+const MAX_TOTAL_BYTES = 40 * 1024 * 1024;
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 const LETTERS = "ABCDEF";
 
@@ -43,7 +46,7 @@ export function ExamGenerator() {
   const promptId = useId();
   const pagesId = useId();
   const diffId = useId();
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [fileError, setFileError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -65,17 +68,25 @@ export function ExamGenerator() {
     return () => clearInterval(id);
   }, [busy]);
 
-  const isPdf = !!file && (file.type === "application/pdf" || /\.pdf$/i.test(file.name));
+  const file = files.length > 0;
+  const isPdfFile = (f: File) => f.type === "application/pdf" || /\.pdf$/i.test(f.name);
+  const isPdf = files.some(isPdfFile);
 
-  function pick(f: File | null) {
+  /** Replace the selection (the browser's picker replaces too). Problems are reported and the bad selection is dropped. */
+  function pick(list: File[]) {
     setFileError(null);
-    if (f && f.size > MAX_BYTES) {
-      setFileError("That file is larger than 8 MB. Please upload a smaller one.");
+    let problem: string | null = null;
+    if (list.length > MAX_FILES) problem = `You can upload at most ${MAX_FILES} files at once (you chose ${list.length}).`;
+    else if (list.some((f) => isPdfFile(f) && f.size > MAX_PDF_BYTES)) problem = "A PDF is larger than 8 MB. Please upload a smaller one.";
+    else if (list.some((f) => !isPdfFile(f) && f.size > MAX_IMAGE_BYTES)) problem = "A photo is larger than 3 MB. Please use a smaller or lower-resolution photo.";
+    else if (list.reduce((n, f) => n + f.size, 0) > MAX_TOTAL_BYTES) problem = "The files together are larger than 40 MB.";
+    if (problem) {
+      setFileError(problem);
       if (fileInput.current) fileInput.current.value = "";
-      setFile(null);
+      setFiles([]);
       return;
     }
-    setFile(f);
+    setFiles(list);
   }
 
   async function generate(e: React.FormEvent<HTMLFormElement>) {
@@ -89,7 +100,8 @@ export function ExamGenerator() {
       duration: String(data.get("duration") ?? "").trim(),
       date: String(data.get("date") ?? "").trim(),
     });
-    if (!file) data.delete("lesson");
+    data.delete("lesson");
+    for (const f of files) data.append("lesson", f);
     abort.current?.abort();
     const ctrl = new AbortController();
     abort.current = ctrl;
@@ -157,7 +169,7 @@ export function ExamGenerator() {
       <form onSubmit={generate} className="grid gap-4 lg:grid-cols-2" data-testid="exam-form">
         <div className="space-y-4">
           <div>
-            <label className="label" htmlFor={fileId}>Lesson (optional)</label>
+            <label className="label" htmlFor={fileId}>Lesson photos or PDF (optional)</label>
             <div className="flex flex-wrap items-center gap-3 rounded-lg border border-dashed border-border bg-background px-4 py-3">
               <Upload className="size-4 text-muted" aria-hidden />
               <input
@@ -165,17 +177,19 @@ export function ExamGenerator() {
                 id={fileId}
                 name="lesson"
                 type="file"
+                multiple
                 accept="application/pdf,image/png,image/jpeg,image/webp,.pdf,.png,.jpg,.jpeg,.webp"
                 className="min-w-0 flex-1 text-sm"
-                onChange={(e) => pick(e.target.files?.[0] ?? null)}
+                onChange={(e) => pick(Array.from(e.target.files ?? []))}
               />
               {file && (
-                <button type="button" className="btn-ghost" onClick={() => { pick(null); if (fileInput.current) fileInput.current.value = ""; }}>
-                  <X className="size-3.5" aria-hidden /> Remove
+                <button type="button" className="btn-ghost" onClick={() => { pick([]); if (fileInput.current) fileInput.current.value = ""; }}>
+                  <X className="size-3.5" aria-hidden /> Remove{files.length > 1 ? " all" : ""}
                 </button>
               )}
             </div>
-            <p className="mt-1 text-xs text-muted">PDF, PNG, JPG or WebP, up to 8 MB. Photos up to 3 MB. A scanned PDF can&apos;t be read: upload its pages as photos instead.</p>
+            <p className="mt-1 text-xs text-muted">Up to 20 files at once: photos of the lesson pages (PNG, JPG, WebP, up to 3 MB each) or a PDF (up to 8 MB). A scanned PDF can&apos;t be read: upload its pages as photos instead.</p>
+            {files.length > 0 && <p className="mt-1 text-xs text-muted" data-testid="exam-files">{files.length} file{files.length === 1 ? "" : "s"} selected: {files.map((f) => f.name).join(", ").slice(0, 160)}</p>}
             {fileError && <p role="alert" className="mt-1 text-xs text-bad">{fileError}</p>}
           </div>
 
