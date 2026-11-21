@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { ThemeToggle } from "@/components/theme-toggle";
 import Link from "next/link";
 import { getUser } from "@/lib/session";
 import { LoginForm } from "./form";
@@ -14,6 +15,7 @@ export default async function LoginPage() {
   if (await getUser()) redirect("/dashboard");
   return (
     <main className="grid min-h-screen place-items-center p-4">
+      <ThemeToggle className="fixed right-3 top-3" />
       <div className="w-full max-w-md">
         <Link href="/" className="mb-6 flex items-center justify-center gap-2 text-lg font-semibold">
           <span className="grid size-8 place-items-center rounded-lg bg-brand text-brand-fg">🔔</span>

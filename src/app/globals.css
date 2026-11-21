@@ -1,7 +1,6 @@
 @import "tailwindcss";
 
 :root {
-  /* Light mode only: never follow the device's dark setting. */
   color-scheme: light;
   --background: #f6f7fb;
   --foreground: #14172b;
@@ -17,6 +16,44 @@
   --warn-soft: #fdf3e0;
   --bad: #b91c1c;
   --bad-soft: #fdeaea;
+}
+
+/* Dark palette: used when the device prefers dark (unless the user picked Light), or when the user picked Dark. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --background: #0d0f1a;
+    --foreground: #e9eaf5;
+    --surface: #161929;
+    --muted: #9296b3;
+    --border: #262a40;
+    --brand: #818cf8;
+    --brand-soft: #1f2347;
+    --brand-fg: #0d0f1a;
+    --good: #4ade80;
+    --good-soft: #12281a;
+    --warn: #fbbf24;
+    --warn-soft: #2c2212;
+    --bad: #f87171;
+    --bad-soft: #2d1515;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --background: #0d0f1a;
+  --foreground: #e9eaf5;
+  --surface: #161929;
+  --muted: #9296b3;
+  --border: #262a40;
+  --brand: #818cf8;
+  --brand-soft: #1f2347;
+  --brand-fg: #0d0f1a;
+  --good: #4ade80;
+  --good-soft: #12281a;
+  --warn: #fbbf24;
+  --warn-soft: #2c2212;
+  --bad: #f87171;
+  --bad-soft: #2d1515;
 }
 
 @theme inline {

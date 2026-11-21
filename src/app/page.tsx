@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { CalendarCheck, GraduationCap, Wallet, Megaphone, Sparkles, ShieldCheck } from "lucide-react";
 
 const FEATURES = [
@@ -17,7 +18,7 @@ export default function Home() {
         <span className="flex items-center gap-2 text-lg font-semibold">
           <span className="grid size-8 place-items-center rounded-lg bg-brand text-brand-fg">🔔</span> SchoolsBell
         </span>
-        <div className="flex gap-2"><Link href="/login" className="btn-ghost">Sign in</Link><Link href="/register" className="btn">Register your school</Link></div>
+        <div className="flex items-center gap-2"><ThemeToggle className="hidden sm:inline-flex" /><Link href="/login" className="btn-ghost">Sign in</Link><Link href="/register" className="btn">Register your school</Link></div>
       </header>
 
       <main>

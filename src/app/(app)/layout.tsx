@@ -5,6 +5,7 @@ import { db, schema } from "@/db";
 import { requireUser } from "@/lib/session";
 import { NAV, ROLE_LABEL } from "@/lib/roles";
 import { Sidebar } from "@/components/sidebar";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { logout } from "../login/actions";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -26,11 +27,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <div className="mt-4 hidden border-t border-border pt-4 md:absolute md:bottom-4 md:left-4 md:right-4 md:block">
           <Link href="/account" className="block truncate text-sm font-medium hover:underline">{user.name}</Link>
           <p className="mb-2 text-xs text-muted">{user.isOwner ? "Principal" : ROLE_LABEL[user.role]}</p>
+          <ThemeToggle className="mb-2" />
           <form action={logout}>
             <button className="btn-ghost w-full"><LogOut className="size-4" aria-hidden /> Sign out</button>
           </form>
         </div>
-        <Link href="/account" className="mt-3 block text-center text-sm text-muted hover:text-foreground md:hidden">My account</Link>
+        <div className="mt-3 flex items-center justify-between md:hidden">
+          <Link href="/account" className="text-sm text-muted hover:text-foreground">My account</Link>
+          <ThemeToggle />
+        </div>
         <form action={logout} className="mt-2 md:hidden">
           <button className="btn-ghost w-full"><LogOut className="size-4" aria-hidden /> Sign out ({user.name})</button>
         </form>
