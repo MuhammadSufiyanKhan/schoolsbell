@@ -35,8 +35,9 @@ Copy `.env.example` to `.env.local`.
 |---|---|
 | `DATABASE_URL` | Postgres (Neon etc.). Empty = embedded PGlite in `.data/` for local dev |
 | `SESSION_SECRET` | **Required in production** (the app refuses to start without it) |
-| `AI_GATEWAY_API_KEY` | Vercel AI Gateway key (not needed on Vercel with OIDC). Without it the AI page shows a friendly "not configured" message |
-| `AI_MODEL` | Optional `provider/model` override |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | **Google Gemini** key ([get one](https://aistudio.google.com/apikey)). When set, all AI features use Gemini directly |
+| `GEMINI_MODEL` | Optional Gemini model name (default `gemini-2.5-flash`) |
+| `AI_GATEWAY_API_KEY` / `AI_MODEL` | Fallback when no Gemini key is set: Vercel AI Gateway (needs a payment card on the Vercel account). Without any key the AI pages explain what is missing |
 
 ### Deploying to Vercel
 

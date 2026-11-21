@@ -1,17 +1,35 @@
 import "server-only";
 import { generateText, Output, type LanguageModel } from "ai";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { z } from "zod";
 import { clampScore } from "./scoring";
 
-// Routed through Vercel AI Gateway: a plain "provider/model" string, swappable via env.
+/**
+ * Which model answers?
+ *  1. GOOGLE_GENERATIVE_AI_API_KEY set  → Google Gemini, called directly with that key.
+ *  2. otherwise                         → Vercel AI Gateway ("provider/model" string; OIDC on Vercel, or AI_GATEWAY_API_KEY).
+ * Resolved at call time so changing env vars never needs a code change.
+ */
+export const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
 export const AI_MODEL = process.env.AI_MODEL ?? "anthropic/claude-sonnet-4.6";
+
+export function resolveModel(): LanguageModel {
+  const key = process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim();
+  if (key) return createGoogleGenerativeAI({ apiKey: key })(process.env.GEMINI_MODEL ?? GEMINI_MODEL);
+  return process.env.AI_MODEL ?? AI_MODEL;
+}
+
+/** Human-readable name of what is answering, for logs. Never includes a key. */
+export function describeModel() {
+  return process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim() ? `google:${process.env.GEMINI_MODEL ?? GEMINI_MODEL}` : `gateway:${process.env.AI_MODEL ?? AI_MODEL}`;
+}
 
 export class AiUnavailableError extends Error {}
 
-/** On Vercel the AI Gateway authenticates via OIDC; elsewhere a key is required. */
+/** A Gemini key is enough on its own; the Gateway needs OIDC (on Vercel) or its own key. */
 export function assertAiConfigured() {
-  if (!process.env.AI_GATEWAY_API_KEY && !process.env.VERCEL) {
-    throw new AiUnavailableError("AI is not configured. Set AI_GATEWAY_API_KEY (or deploy on Vercel with AI Gateway enabled).");
+  if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim() && !process.env.AI_GATEWAY_API_KEY && !process.env.VERCEL) {
+    throw new AiUnavailableError("AI is not configured. Set GOOGLE_GENERATIVE_AI_API_KEY (Gemini) or AI_GATEWAY_API_KEY.");
   }
 }
 
@@ -43,8 +61,8 @@ export function classifyAiError(e: unknown): AiFailure {
   const { status, text } = inspect(e);
   // Billing first: providers report "no credit" as 402, 403 or even 429.
   if (status === 402 || /credit card|payment (method|required)|billing|customer_verification|insufficient[_ ](funds|credit|quota)|credit balance|out of credit/.test(text)) return "billing";
-  if (status === 401 || status === 403 || /invalid[_ ]api[_ ]key|incorrect api key|authentication|unauthori[sz]ed|permission denied/.test(text)) return "auth";
-  if (status === 429 || /rate[ _]limit|too many requests|quota/.test(text)) return "rate_limit";
+  if (status === 401 || status === 403 || /invalid[_ ]api[_ ]key|incorrect api key|api[_ ]key[_ ]invalid|api key not valid|api key (expired|not found)|authentication|unauthori[sz]ed|permission[_ ]denied/.test(text)) return "auth";
+  if (status === 429 || /rate[ _]limit|too many requests|quota|resource[_ ]exhausted/.test(text)) return "rate_limit";
   if (status === 404 || /model.{0,40}(not found|does not exist|not available)|unknown model|no such model/.test(text)) return "model";
   if (status === 408 || status === 504 || /timeout|timed out|aborterror|aborted/.test(text)) return "timeout";
   return "unknown";
@@ -52,11 +70,11 @@ export function classifyAiError(e: unknown): AiFailure {
 
 /** Accurate, actionable and secret-free: shown to teachers and administrators. */
 export const AI_FAILURE_MESSAGES: Record<AiFailure, string> = {
-  not_configured: "AI isn't set up yet. An administrator needs to add an AI key (AI_GATEWAY_API_KEY) or deploy on Vercel with AI Gateway enabled.",
-  billing: "AI is switched off because the AI account needs a payment method or has run out of credit. An administrator can fix this (Vercel dashboard → AI Gateway → add a card, or top up), then try again.",
-  auth: "AI is unavailable because the AI key was rejected. An administrator needs to check the AI key in the project settings.",
+  not_configured: "AI isn't set up yet. An administrator needs to add the Gemini API key (GOOGLE_GENERATIVE_AI_API_KEY) in the project's environment variables.",
+  billing: "AI is switched off because the AI account needs a payment method or has run out of credit. An administrator needs to fix the billing on the AI provider's account (Google AI Studio for Gemini, or Vercel → AI Gateway), then try again.",
+  auth: "AI is unavailable because the AI key was rejected. An administrator needs to check the key (GOOGLE_GENERATIVE_AI_API_KEY) in the project's environment variables.",
   rate_limit: "The AI service is busy or over its usage limit. Wait a minute and try again.",
-  model: "The configured AI model wasn't found. An administrator should check the AI_MODEL setting.",
+  model: "The configured AI model wasn't found. An administrator should check the model setting (GEMINI_MODEL, or AI_MODEL for the Gateway).",
   timeout: "The AI took too long to answer. Try again, or ask for fewer questions.",
   unknown: "The AI service couldn't complete that request. Please try again, and tell your administrator if it keeps failing.",
 };
@@ -74,7 +92,7 @@ function logFailure(failure: AiFailure, e: unknown) {
   // request body, i.e. the prompt, which can contain students' answers.
   const { status } = inspect(e);
   const message = redactSecrets(e instanceof Error ? e.message : String(e)).slice(0, 300);
-  console.error("AI error", { failure, status, model: typeof AI_MODEL === "string" ? AI_MODEL : "custom", message });
+  console.error("AI error", { failure, status, model: describeModel(), message });
 }
 
 /** Message for inline (return-value) forms. */
@@ -114,7 +132,7 @@ export function aiErrorCode(e: unknown) {
 }
 
 /** One plain-text generation, used by the AI Assistant page. */
-export async function generatePlainText(prompt: string, instructions: string, model: LanguageModel = AI_MODEL) {
+export async function generatePlainText(prompt: string, instructions: string, model: LanguageModel = resolveModel()) {
   assertAiConfigured();
   const { text } = await generateText({ model, instructions, prompt });
   return text;
@@ -155,7 +173,7 @@ export async function generateTest(
     mcqShare: "all_mcq" | "mixed" | "all_short";
     difficulty: string;
   },
-  model: LanguageModel = AI_MODEL, // overridable so tests can inject a mock
+  model: LanguageModel = resolveModel(), // overridable so tests can inject a mock
 ) {
   assertAiConfigured();
   const mix = {
@@ -214,7 +232,7 @@ const GradeResult = z.object({
  *  - no names or IDs of students are sent, only the answer text
  *  - scores are clamped to [0, maxPoints] and only requested ids are accepted
  */
-export async function gradeAnswers(items: GradeItem[], model: LanguageModel = AI_MODEL) {
+export async function gradeAnswers(items: GradeItem[], model: LanguageModel = resolveModel()) {
   assertAiConfigured();
   if (!items.length) return new Map<number, { score: number; feedback: string }>();
 
