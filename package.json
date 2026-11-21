@@ -14,7 +14,6 @@
     "vercel-build": "tsx src/db/seed.ts && next build"
   },
   "dependencies": {
-    "@ai-sdk/google": "^4.0.124",
     "@ai-sdk/groq": "^4.0.86",
     "@electric-sql/pglite": "^0.5.17",
     "@neondatabase/serverless": "^1.2.1",

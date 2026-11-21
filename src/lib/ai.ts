@@ -1,37 +1,23 @@
 import "server-only";
 import { generateText, streamText, Output, type LanguageModel } from "ai";
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createGroq } from "@ai-sdk/groq";
 import { z } from "zod";
 import { clampScore } from "./scoring";
 
 /**
- * Which AI service answers? AI_PROVIDER (groq | google | gateway) forces one; otherwise the first key found wins:
- *   GROQ_API_KEY → Groq,   GOOGLE_GENERATIVE_AI_API_KEY → Google Gemini,   else the Vercel AI Gateway.
- * Resolved at call time so changing env vars never needs a code change.
+ * AI runs on Groq (GROQ_API_KEY). There is deliberately no other provider and no silent fallback: if the key is
+ * missing the app says so, rather than quietly talking to a different service.
  *
- * Providers retire and rename models often (a name that worked last year can return 404 / "decommissioned"), and
- * a single model can be overloaded while its neighbour is fine. So without an explicit pin (GROQ_MODEL /
- * GEMINI_MODEL) we try an ordered list and keep using whichever works. A pin is deliberate and never second-guessed.
+ * Providers retire and rename models often (a name that worked last year can return 404 / "decommissioned"), and a
+ * single model can be overloaded while its neighbour is fine. So without an explicit pin (GROQ_MODEL) we try an
+ * ordered list and keep using whichever works. A pin is deliberate and never second-guessed.
  */
-export type Provider = "groq" | "google" | "gateway";
-
-export function activeProvider(): Provider {
-  const forced = process.env.AI_PROVIDER?.trim().toLowerCase();
-  if (forced === "groq" || forced === "google" || forced === "gateway") return forced;
-  if (process.env.GROQ_API_KEY?.trim()) return "groq";
-  if (process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim()) return "google";
-  return "gateway";
-}
-
 /** Groq models that support strict JSON-schema output (needed for AI test generation and grading), best first. */
 export const GROQ_DEFAULT_MODELS = ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "moonshotai/kimi-k2-instruct-0905"];
-export const GEMINI_DEFAULT_MODELS = ["gemini-flash-latest", "gemini-3.8-flash", "gemini-2.5-flash"];
-export const AI_MODEL = process.env.AI_MODEL ?? "anthropic/claude-sonnet-4.6";
 
 /**
- * Newer Gemini models "think" before answering, and some default to HIGH thinking, which can take minutes
- * before the first word appears. Teachers want drafts quickly, so we ask for light reasoning by default.
+ * Reasoning models "think" before answering, and a high setting can take a long time before the first word
+ * appears. Teachers want drafts quickly, so we ask for light reasoning by default.
  * AI_REASONING = none | minimal | low | medium | high  (default: low).
  */
 const REASONING_LEVELS = ["none", "minimal", "low", "medium", "high"] as const;
@@ -59,35 +45,20 @@ export const limits = () => ({
   streamTotalMs: seconds("AI_TIMEOUT_SECONDS", 120) + 30_000,
 });
 
-const namesFor = (pinEnv: string, defaults: string[]) => {
-  const pinned = process.env[pinEnv]?.trim();
-  return pinned ? [pinned] : defaults;
+const modelNames = () => {
+  const pinned = process.env.GROQ_MODEL?.trim();
+  return pinned ? [pinned] : GROQ_DEFAULT_MODELS;
 };
-const modelNames = (provider: Provider) => (provider === "groq" ? namesFor("GROQ_MODEL", GROQ_DEFAULT_MODELS) : provider === "google" ? namesFor("GEMINI_MODEL", GEMINI_DEFAULT_MODELS) : [process.env.AI_MODEL ?? AI_MODEL]);
 
 /** Candidate models in the order to try them. */
 export function resolveCandidates(): LanguageModel[] {
-  const provider = activeProvider();
-  if (provider === "groq") {
-    const apiKey = process.env.GROQ_API_KEY?.trim();
-    if (!apiKey) throw new AiUnavailableError("GROQ_API_KEY is not set.");
-    // GROQ_BASE_URL is only for a proxy in front of Groq; normally unset.
-    const baseURL = process.env.GROQ_BASE_URL?.trim();
-    const groq = createGroq({ apiKey, ...(baseURL ? { baseURL } : {}) });
-    return modelNames("groq").map((name) => groq(name));
-  }
-  if (provider === "google") {
-    const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim();
-    if (!apiKey) throw new AiUnavailableError("GOOGLE_GENERATIVE_AI_API_KEY is not set.");
-    const baseURL = process.env.GEMINI_BASE_URL?.trim();
-    const google = createGoogleGenerativeAI({ apiKey, ...(baseURL ? { baseURL } : {}) });
-    return modelNames("google").map((name) => google(name));
-  }
-  return [process.env.AI_MODEL ?? AI_MODEL];
+  const apiKey = process.env.GROQ_API_KEY?.trim();
+  if (!apiKey) throw new AiUnavailableError("GROQ_API_KEY is not set.");
+  // GROQ_BASE_URL is only for a proxy in front of Groq; normally unset.
+  const baseURL = process.env.GROQ_BASE_URL?.trim();
+  const groq = createGroq({ apiKey, ...(baseURL ? { baseURL } : {}) });
+  return modelNames().map((name) => groq(name));
 }
-
-/** The model that is tried first. */
-export const resolveModel = (): LanguageModel => resolveCandidates()[0];
 
 /** What was last known to work (or would be tried first), for logs. Never includes a key. */
 const memory = { index: 0 };
@@ -96,16 +67,10 @@ export function resetModelMemory() {
   memory.index = 0;
 }
 export function describeModel() {
-  const provider = activeProvider();
-  const names = modelNames(provider);
-  return `${provider}:${names[Math.min(memory.index, names.length - 1)]}`;
+  const names = modelNames();
+  return `groq:${names[Math.min(memory.index, names.length - 1)]}`;
 }
 
-/**
- * Run `call` with the first candidate that exists. ONLY a "model not found / retired" failure moves on to the
- * next candidate; any other failure (bad key, billing, rate limit, …) is thrown immediately, because trying
- * other models can't fix it. The model that worked is remembered so later calls start with it.
- */
 /** Remembered (known-good) model first, then the rest in their original order. */
 const candidateOrder = (n: number, state: { index: number }) =>
   Array.from({ length: n }, (_, i) => i).sort((a, b) => (a === state.index ? -1 : b === state.index ? 1 : a - b));
@@ -146,11 +111,9 @@ function runModel<T>(call: (model: LanguageModel, ctx: CallContext) => Promise<T
 
 export class AiUnavailableError extends Error {}
 
-/** Is the chosen provider usable? (Groq/Google need their key; the Gateway needs OIDC on Vercel or its own key.) */
+/** The only requirement is the Groq key. */
 export function assertAiConfigured() {
-  const p = activeProvider();
-  const ok = p === "groq" ? !!process.env.GROQ_API_KEY?.trim() : p === "google" ? !!process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim() : !!(process.env.AI_GATEWAY_API_KEY || process.env.VERCEL);
-  if (!ok) throw new AiUnavailableError("AI is not configured. Set GROQ_API_KEY (Groq), GOOGLE_GENERATIVE_AI_API_KEY (Gemini) or AI_GATEWAY_API_KEY.");
+  if (!process.env.GROQ_API_KEY?.trim()) throw new AiUnavailableError("AI is not configured. Set GROQ_API_KEY.");
 }
 
 // ───────────────────────── Failure handling ─────────────────────────
@@ -211,7 +174,7 @@ export const AI_FAILURE_MESSAGES: Record<AiFailure, string> = {
   auth: "AI is unavailable because the AI key was rejected. An administrator needs to check the key (GROQ_API_KEY) in the project's environment variables.",
   rate_limit: "The AI service is busy or over its usage limit. Wait a minute and try again.",
   overloaded: "The AI service is very busy right now (too many people are using it). Please try again in a minute.",
-  model: "None of the configured AI models could be found (providers retire models). An administrator should set GROQ_MODEL (or GEMINI_MODEL, or AI_MODEL for the Gateway) to a current model name.",
+  model: "None of the configured AI models could be found (Groq retires models). An administrator should set GROQ_MODEL to a current model name from console.groq.com/docs/models.",
   timeout: "The AI took too long to answer and was stopped. Try again in a moment, or ask for something shorter.",
   empty: "The AI didn't return an answer (it may have run out of time while thinking). Please try again, or ask for something shorter.",
   unknown: "The AI service couldn't complete that request. Please try again, and tell your administrator if it keeps failing.",
@@ -374,7 +337,7 @@ async function structuredCall<T>(attempt: (providerOptions?: { groq: { structure
   try {
     return await attempt();
   } catch (e) {
-    if (activeProvider() === "groq" && schemaUnsupported(e)) return attempt({ groq: { structuredOutputs: false } });
+    if (schemaUnsupported(e)) return attempt({ groq: { structuredOutputs: false } });
     throw e;
   }
 }
